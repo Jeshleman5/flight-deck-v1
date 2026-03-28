@@ -1,0 +1,38 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+
+// Storage shim using localStorage
+// (This will be replaced with Supabase in V1.1)
+window.storage = {
+  get: async (key) => {
+    try {
+      const value = localStorage.getItem(key);
+      return value ? { value } : null;
+    } catch {
+      return null;
+    }
+  },
+  set: async (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+      return { key, value };
+    } catch {
+      return null;
+    }
+  },
+  delete: async (key) => {
+    try {
+      localStorage.removeItem(key);
+      return { key, deleted: true };
+    } catch {
+      return null;
+    }
+  },
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
