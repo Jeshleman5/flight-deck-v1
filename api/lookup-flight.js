@@ -40,7 +40,7 @@ export default async function handler(req, res) {
           arrivalCity: f.arrival?.airport || "",
           departureDate: departureDate || f.flight_date || "",
           departureTime: extractTime(f.departure?.scheduled),
-          arrivalDate: extractDate(f.arrival?.scheduled) || departureDate || "",
+          arrivalDate: figureArrivalDate(departureDate, extractTime(f.departure?.scheduled), extractTime(f.arrival?.scheduled)),
           arrivalTime: extractTime(f.arrival?.scheduled),
           departureTerminal: f.departure?.terminal || "",
           arrivalTerminal: f.arrival?.terminal || "",
@@ -144,5 +144,16 @@ function extractDate(isoString) {
     return isoString.split("T")[0];
   } catch {
     return "";
+  }
+  function figureArrivalDate(depDate, depTime, arrTime) {
+    if (!depDate) return "";
+    if (!depTime || !arrTime) return depDate;
+    // If arrival time is earlier than departure time, it's an overnight flight
+    if (arrTime < depTime) {
+      const d = new Date(depDate + "T00:00:00");
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split("T")[0];
+    }
+    return depDate;
   }
 }
