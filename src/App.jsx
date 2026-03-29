@@ -333,6 +333,395 @@ const styles = `
   @media(max-width:768px){.hm{display:none!important}.gr{grid-template-columns:1fr!important}}
 `;
 
+/* ── Stable subcomponents (module scope — avoids remount/focus loss on each parent render) ── */
+function Tag({ m, sel, onClick, onRm }) {
+  return (
+    <span className={`tg ${sel ? "ts" : ""}`} onClick={onClick} style={{ background: `${m.color}12`, color: m.color }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+      {m.name}
+      {onRm && m.id !== "me" && (
+        <X size={10} onClick={(e) => { e.stopPropagation(); onRm(); }} style={{ cursor: "pointer", marginLeft: 1 }} />
+      )}
+    </span>
+  );
+}
+
+function FlightCard({ f, i = 0, members, onOpenDetail }) {
+  const d = daysTo(f.departureDate);
+  const sc = ST_MAP[f.status] || ST_MAP.upcoming;
+  const tv = (f.travelers || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
+  return (
+    <div
+      className="fc card-hover"
+      onClick={() => onOpenDetail(f)}
+      style={{ background: C.bgCard, borderRadius: 14, cursor: "pointer", border: `1px solid ${C.border}`, overflow: "hidden", animationDelay: `${i * 0.05}s` }}
+    >
+      <div style={{ height: 2, background: C.accent, opacity: 0.5 }} />
+      <div style={{ padding: "13px 16px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+        <div style={{ flex: "1 1 auto", minWidth: 170 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>{f.departureAirport || "???"}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <div style={{ width: 14, height: 1, background: C.textDim }} />
+              <PlaneIcon size={14} color={C.accent} />
+              <div style={{ width: 14, height: 1, background: C.textDim }} />
+            </div>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>{f.arrivalAirport || "???"}</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: C.textMuted }}>{fmtDate(f.departureDate)}</span>
+            {f.departureTime && (
+              <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>
+                {f.departureTime}
+                {f.arrivalTime ? ` — ${f.arrivalTime}` : ""}
+              </span>
+            )}
+          </div>
+          {tv.length > 0 && (
+            <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
+              {tv.map((m) => (
+                <span key={m.id} style={{ fontSize: 9, color: m.color, background: `${m.color}10`, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>
+                  {m.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          {f.flightNumber && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Flight</div>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.navy }}>{f.flightNumber}</div>
+            </div>
+          )}
+          {f.miles && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Miles</div>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.olive }}>{comma(f.miles)}</div>
+            </div>
+          )}
+          {f.cost != null && f.cost !== "" && (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Cost</div>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.accent }}>{fmtCur(f.cost)}</div>
+            </div>
+          )}
+          <span style={{ background: sc.bg, color: sc.text, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 14, fontFamily: "'Fraunces',serif", textTransform: "uppercase" }}>{sc.label}</span>
+          {d != null && d >= 0 && f.status === "upcoming" && (
+            <span
+              style={{
+                background: d <= 3 ? "rgba(155,48,34,0.10)" : C.accentSoft,
+                color: d <= 3 ? C.danger : C.accent,
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "3px 8px",
+                borderRadius: 14,
+                fontFamily: "'JetBrains Mono',monospace",
+              }}
+            >
+              {d === 0 ? "TODAY" : d === 1 ? "TMW" : `${d}d`}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MemFilterBar({ members, filterM, setFilterM }) {
+  if (members.length <= 1) return null;
+  return (
+    <div>
+      <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontFamily: "'Fraunces',serif" }}>Filter by traveler</div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        <span
+          className={`tg ${!filterM ? "ts" : ""}`}
+          onClick={() => setFilterM(null)}
+          style={{ background: !filterM ? `${C.accent}15` : C.bgInput, color: !filterM ? C.accent : C.textMuted }}
+        >
+          All
+        </span>
+        {members.map((m) => (
+          <Tag key={m.id} m={m} sel={filterM === m.id} onClick={() => setFilterM(filterM === m.id ? null : m.id)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd }) {
+  return (
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>All Flights</h1>
+        <button className="bp" onClick={onAdd}>
+          <Plus size={14} /> Add
+        </button>
+      </div>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textDim }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search flights..." style={{ paddingLeft: 32 }} />
+      </div>
+      <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {applyMF(filtered).map((f, i) => (
+          <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />
+        ))}
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
+      </div>
+    </div>
+  );
+}
+
+function FamilyView({
+  showMF,
+  setShowMF,
+  newMem,
+  setNewMem,
+  addMem,
+  members,
+  rmMem,
+  notif,
+  setNotif,
+  upcoming,
+  gcalURL,
+}) {
+  return (
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}>
+        <Users size={17} color={C.accent} /> Family & Settings
+      </h1>
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, fontFamily: "'Fraunces',serif" }}>Members</div>
+          <button className="bs" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setShowMF(!showMF)}>
+            <Plus size={11} /> Add
+          </button>
+        </div>
+        {showMF && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "end" }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 2 }}>Name</label>
+              <input value={newMem.name} onChange={(e) => setNewMem((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Sarah" />
+            </div>
+            <div style={{ flex: "0 0 120px" }}>
+              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 2 }}>Rel</label>
+              <select value={newMem.relationship} onChange={(e) => setNewMem((p) => ({ ...p, relationship: e.target.value }))}>
+                {RELS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="bp" style={{ padding: "8px 14px", fontSize: 11 }} onClick={addMem}>
+              <Check size={13} />
+            </button>
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {members.map((m) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: C.bgInput, borderRadius: 9 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: m.color }} />
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{m.name}</span>
+                <span style={{ fontSize: 10, color: C.textMuted, textTransform: "capitalize" }}>{m.relationship}</span>
+              </div>
+              {m.id !== "me" && (
+                <button style={{ background: "none", border: "none", cursor: "pointer", padding: 3 }} onClick={() => rmMem(m.id)}>
+                  <X size={13} color={C.textDim} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}>
+          <Bell size={11} /> Notifications
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={notif.enabled} onChange={(e) => setNotif((p) => ({ ...p, enabled: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Enable notifications
+          </label>
+          {notif.enabled && (
+            <>
+              <input value={notif.email} onChange={(e) => setNotif((p) => ({ ...p, email: e.target.value }))} placeholder="your@email.com" type="email" style={{ maxWidth: 280 }} />
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+                <input type="checkbox" checked={notif.sevenDay} onChange={(e) => setNotif((p) => ({ ...p, sevenDay: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 7-day departure
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+                <input type="checkbox" checked={notif.twentyFourHr} onChange={(e) => setNotif((p) => ({ ...p, twentyFourHr: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 24-hour return
+              </label>
+              <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.5, marginTop: 2 }}>Alerts appear in-app. Connect Supabase + Resend for email delivery.</p>
+            </>
+          )}
+        </div>
+      </div>
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif" }}>Export</div>
+        <button className="bs" onClick={() => upcoming.forEach((f) => window.open(gcalURL(f, members), "_blank"))}>
+          <CalIcon /> Sync All to Google Cal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddFlightForm({
+  editing,
+  form,
+  uf,
+  lookupFlight,
+  looking,
+  lookErr,
+  members,
+  togTrav,
+  save,
+  setView,
+  setEditing,
+  setForm,
+}) {
+  const isE = !!editing;
+  return (
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 580, margin: "0 auto", width: "100%" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>{isE ? "Edit Flight" : "Add Flight"}</h1>
+        <button
+          className="bs"
+          onClick={() => {
+            setView("flights");
+            setEditing(null);
+            setForm({ ...EMPTY });
+          }}
+        >
+          <X size={13} /> Cancel
+        </button>
+      </div>
+      {!isE && (
+        <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+          <h3 style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            <Search size={14} color={C.accent} /> Quick Lookup
+          </h3>
+          <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>Enter a flight number and departure date, then hit lookup to auto-fill details.</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Flight #</label>
+              <input value={form.flightNumber} onChange={(e) => uf("flightNumber", e.target.value)} placeholder="UA2345" />
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Depart Date</label>
+              <input type="date" value={form.departureDate} onChange={(e) => uf("departureDate", e.target.value)} />
+            </div>
+            <button className="bp" style={{ padding: "9px 18px", fontSize: 12 }} onClick={lookupFlight} disabled={looking}>
+              {looking ? (
+                <>
+                  <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Looking up...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={14} /> Lookup
+                </>
+              )}
+            </button>
+          </div>
+          {lookErr && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8, padding: "7px 10px", background: "rgba(155,48,34,0.07)", borderRadius: 8 }}>
+              <AlertCircle size={13} color={C.danger} />
+              <span style={{ fontSize: 11, color: C.danger }}>{lookErr}</span>
+            </div>
+          )}
+          {form.departureAirport && form.arrivalAirport && !isE && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8, padding: "7px 10px", background: `${C.olive}08`, borderRadius: 8 }}>
+              <CheckCircle2 size={13} color={C.success} />
+              <span style={{ fontSize: 11, color: C.success }}>
+                Found: {form.departureAirport} &gt; {form.arrivalAirport}
+                {form.departureTime ? ` at ${form.departureTime}` : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <FormField label="Flight #" value={form.flightNumber} onChange={(e) => uf("flightNumber", e.target.value)} placeholder="UA2345" half />
+          <FormField label="Airline" value={form.airline} onChange={(e) => uf("airline", e.target.value)} placeholder="United Airlines" half />
+          <FormField
+            label="From"
+            value={form.departureAirport}
+            onChange={(e) => {
+              uf("departureAirport", e.target.value);
+              if (e.target.value.length === 3) {
+                const d = getDist(e.target.value.toUpperCase(), (form.arrivalAirport || "").toUpperCase());
+                if (d) uf("miles", d);
+              }
+            }}
+            placeholder="JFK"
+            half
+          />
+          <FormField
+            label="To"
+            value={form.arrivalAirport}
+            onChange={(e) => {
+              uf("arrivalAirport", e.target.value);
+              if (e.target.value.length === 3) {
+                const d = getDist((form.departureAirport || "").toUpperCase(), e.target.value.toUpperCase());
+                if (d) uf("miles", d);
+              }
+            }}
+            placeholder="FCO"
+            half
+          />
+          <FormField label="Depart Date" value={form.departureDate} onChange={(e) => uf("departureDate", e.target.value)} type="date" half />
+          <FormField label="Depart Time" value={form.departureTime} onChange={(e) => uf("departureTime", e.target.value)} type="time" half />
+          <FormField label="Arrive Date" value={form.arrivalDate} onChange={(e) => uf("arrivalDate", e.target.value)} type="date" half />
+          <FormField label="Arrive Time" value={form.arrivalTime} onChange={(e) => uf("arrivalTime", e.target.value)} type="time" half />
+          <FormField label="Dep Terminal" value={form.departureTerminal} onChange={(e) => uf("departureTerminal", e.target.value)} placeholder="1" half />
+          <FormField label="Arr Terminal" value={form.arrivalTerminal} onChange={(e) => uf("arrivalTerminal", e.target.value)} placeholder="3" half />
+          <FormField label="Cost (USD)" value={form.cost} onChange={(e) => uf("cost", e.target.value)} type="number" placeholder="425" half />
+          <FormField label="Miles" value={form.miles} onChange={(e) => uf("miles", e.target.value)} type="number" placeholder="Auto" half />
+          <FormField label="Confirmation" value={form.confirmationCode} onChange={(e) => uf("confirmationCode", e.target.value)} placeholder="ABC123" half />
+          <div style={{ flex: "1 1 calc(50% - 5px)", minWidth: 125 }}>
+            <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Status</label>
+            <select value={form.status} onChange={(e) => uf("status", e.target.value)}>
+              <option value="upcoming">Upcoming</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div style={{ flex: "1 1 100%" }}>
+            <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Travelers</label>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {members.map((m) => (
+                <Tag key={m.id} m={m} sel={(form.travelers || []).includes(m.id)} onClick={() => togTrav(m.id)} />
+              ))}
+            </div>
+          </div>
+          <div style={{ flex: "1 1 100%" }}>
+            <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Notes</label>
+            <textarea value={form.notes} onChange={(e) => uf("notes", e.target.value)} placeholder="Notes..." rows={2} style={{ resize: "vertical", minHeight: 44 }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "flex-end" }}>
+          <button
+            className="bs"
+            onClick={() => {
+              setView("flights");
+              setEditing(null);
+              setForm({ ...EMPTY });
+            }}
+          >
+            Cancel
+          </button>
+          <button className="bp" onClick={save} disabled={!form.departureDate && !form.flightNumber}>
+            <Check size={13} /> {isE ? "Update" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FlightDeck() {
   const [flights,setFlights] = useState([]);
   const [members,setMembers] = useState(DEF_MEM);
@@ -358,51 +747,57 @@ export default function FlightDeck() {
   // ── Form updater ──
   const uf = useCallback((k,v) => setForm(p=>({...p,[k]:v})),[]);
 
-  // ── Flight Lookup ──
-  const lookupFlight = async () => {
-    if (!form.flightNumber || !form.departureDate) { setLookErr("Enter flight number and departure date first."); return; }
-    setLooking(true); setLookErr("");
-    try {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:1000,
-          tools:[{type:"web_search_20250305",name:"web_search"}],
-          messages:[{role:"user",content:`Look up flight ${form.flightNumber} on ${form.departureDate}. Find the departure airport (IATA), arrival airport (IATA), scheduled departure time (24h HH:MM), scheduled arrival time (24h HH:MM), arrival date (YYYY-MM-DD), departure terminal, arrival terminal, and airline name. Return ONLY a JSON object (no markdown, no explanation): {"airline":"str|null","departureAirport":"IATA|null","arrivalAirport":"IATA|null","departureTime":"HH:MM|null","arrivalTime":"HH:MM|null","arrivalDate":"YYYY-MM-DD|null","departureTerminal":"str|null","arrivalTerminal":"str|null"}`}]
-        })
-      });
-      const data = await resp.json();
-      const texts = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      const clean = texts.replace(/```json|```/g,"").trim();
-      // Try to find JSON in the response
-      const jsonMatch = clean.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setForm(prev => {
-          const dep = (parsed.departureAirport||"").toUpperCase();
-          const arr = (parsed.arrivalAirport||"").toUpperCase();
-          const miles = getDist(dep, arr);
-          return {
-            ...prev,
-            airline: parsed.airline || prev.airline,
-            departureAirport: dep || prev.departureAirport,
-            arrivalAirport: arr || prev.arrivalAirport,
-            departureTime: parsed.departureTime || prev.departureTime,
-            arrivalTime: parsed.arrivalTime || prev.arrivalTime,
-            arrivalDate: parsed.arrivalDate || prev.arrivalDate,
-            departureTerminal: parsed.departureTerminal || prev.departureTerminal,
-            arrivalTerminal: parsed.arrivalTerminal || prev.arrivalTerminal,
-            miles: miles || prev.miles,
-          };
-        });
-      } else {
-        setLookErr("Couldn't find flight details. Check the flight number and date.");
-      }
-    } catch(e) {
-      setLookErr("Lookup failed. You can enter details manually.");
+  // ── Flight Lookup (serverless proxy — API key must not live in the browser) ──
+  const lookupFlight = useCallback(async () => {
+    if (!form.flightNumber || !form.departureDate) {
+      setLookErr("Enter flight number and departure date first.");
+      return;
     }
-    setLooking(false);
-  };
+    setLooking(true);
+    setLookErr("");
+    try {
+      const resp = await fetch("/api/lookup-flight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flightNumber: form.flightNumber, departureDate: form.departureDate }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.ok === false) {
+        if (resp.status === 404) {
+          setLookErr("Lookup API not available (no /api route). Deploy to Vercel or run `vercel dev` so /api/lookup-flight is served; plain `vite` dev does not include serverless functions.");
+        } else {
+          setLookErr(data.error || "Lookup failed. You can enter details manually.");
+        }
+        return;
+      }
+      const parsed = data.flight;
+      if (!parsed) {
+        setLookErr("Couldn't find flight details. Check the flight number and date.");
+        return;
+      }
+      setForm((prev) => {
+        const dep = (parsed.departureAirport || "").toUpperCase();
+        const arr = (parsed.arrivalAirport || "").toUpperCase();
+        const miles = getDist(dep, arr);
+        return {
+          ...prev,
+          airline: parsed.airline || prev.airline,
+          departureAirport: dep || prev.departureAirport,
+          arrivalAirport: arr || prev.arrivalAirport,
+          departureTime: parsed.departureTime || prev.departureTime,
+          arrivalTime: parsed.arrivalTime || prev.arrivalTime,
+          arrivalDate: parsed.arrivalDate || prev.arrivalDate,
+          departureTerminal: parsed.departureTerminal || prev.departureTerminal,
+          arrivalTerminal: parsed.arrivalTerminal || prev.arrivalTerminal,
+          miles: miles || prev.miles,
+        };
+      });
+    } catch {
+      setLookErr("Lookup failed. You can enter details manually.");
+    } finally {
+      setLooking(false);
+    }
+  }, [form.flightNumber, form.departureDate]);
 
   // ── CRUD ──
   const save = () => {
@@ -439,30 +834,6 @@ export default function FlightDeck() {
   // ── Tiny components ──
   const NavTab=({icon:I,label,id,ci})=><button onClick={()=>setView(id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 12px",background:"none",border:"none",cursor:"pointer",color:view===id?C.accent:C.textMuted,fontSize:9,fontWeight:600,fontFamily:"'Fraunces',serif",borderBottom:view===id?`2px solid ${C.accent}`:"2px solid transparent",transition:"all 0.2s"}}>{ci||<I size={17}/>}<span>{label}</span></button>;
   const Stat=({icon,label,value,sub,color=C.accent})=><div className="stat-card" style={{background:C.bgCard,borderRadius:14,padding:16,border:`1px solid ${C.border}`,flex:"1 1 170px",minWidth:145}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}><div style={{background:`${color}12`,borderRadius:8,padding:6,display:"flex"}}>{icon}</div><span style={{color:C.textMuted,fontSize:9,fontWeight:700,fontFamily:"'Fraunces',serif",letterSpacing:"0.8px",textTransform:"uppercase"}}>{label}</span></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:700,lineHeight:1}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.textMuted,marginTop:4}}>{sub}</div>}</div>;
-  const Tag=({m,sel,onClick,onRm})=><span className={`tg ${sel?"ts":""}`} onClick={onClick} style={{background:`${m.color}12`,color:m.color}}><span style={{width:6,height:6,borderRadius:"50%",background:m.color,display:"inline-block"}}/>{m.name}{onRm&&m.id!=="me"&&<X size={10} onClick={e=>{e.stopPropagation();onRm()}} style={{cursor:"pointer",marginLeft:1}}/>}</span>;
-
-  const FC=({f,i=0})=>{const d=daysTo(f.departureDate),sc=ST_MAP[f.status]||ST_MAP.upcoming,tv=(f.travelers||[]).map(id=>members.find(m=>m.id===id)).filter(Boolean);
-  return <div className="fc card-hover" onClick={()=>setDetail(f)} style={{background:C.bgCard,borderRadius:14,cursor:"pointer",border:`1px solid ${C.border}`,overflow:"hidden",animationDelay:`${i*0.05}s`}}>
-    <div style={{height:2,background:C.accent,opacity:0.5}}/>
-    <div style={{padding:"13px 16px",display:"flex",flexWrap:"wrap",gap:12,alignItems:"center"}}>
-      <div style={{flex:"1 1 auto",minWidth:170}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:700,letterSpacing:1}}>{f.departureAirport||"???"}</span>
-          <div style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:14,height:1,background:C.textDim}}/><PlaneIcon size={14} color={C.accent}/><div style={{width:14,height:1,background:C.textDim}}/></div>
-          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:700,letterSpacing:1}}>{f.arrivalAirport||"???"}</span>
-        </div>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><span style={{fontSize:11,color:C.textMuted}}>{fmtDate(f.departureDate)}</span>{f.departureTime&&<span style={{fontSize:11,color:C.textMuted,fontFamily:"'JetBrains Mono',monospace"}}>{f.departureTime}{f.arrivalTime?` — ${f.arrivalTime}`:""}</span>}</div>
-        {tv.length>0&&<div style={{display:"flex",gap:3,marginTop:5,flexWrap:"wrap"}}>{tv.map(m=><span key={m.id} style={{fontSize:9,color:m.color,background:`${m.color}10`,padding:"1px 7px",borderRadius:8,fontWeight:600}}>{m.name}</span>)}</div>}
-      </div>
-      <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
-        {f.flightNumber&&<div style={{textAlign:"center"}}><div style={{fontSize:8,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Flight</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:C.navy}}>{f.flightNumber}</div></div>}
-        {f.miles&&<div style={{textAlign:"center"}}><div style={{fontSize:8,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Miles</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:C.olive}}>{comma(f.miles)}</div></div>}
-        {f.cost!=null&&f.cost!==""&&<div style={{textAlign:"center"}}><div style={{fontSize:8,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Cost</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:C.accent}}>{fmtCur(f.cost)}</div></div>}
-        <span style={{background:sc.bg,color:sc.text,fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:14,fontFamily:"'Fraunces',serif",textTransform:"uppercase"}}>{sc.label}</span>
-        {d!=null&&d>=0&&f.status==="upcoming"&&<span style={{background:d<=3?"rgba(155,48,34,0.10)":C.accentSoft,color:d<=3?C.danger:C.accent,fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:14,fontFamily:"'JetBrains Mono',monospace"}}>{d===0?"TODAY":d===1?"TMW":`${d}d`}</span>}
-      </div>
-    </div>
-  </div>};
 
   // ── Detail Modal ──
   const DM=({f})=>{const tv=(f.travelers||[]).map(id=>members.find(m=>m.id===id)).filter(Boolean);
@@ -494,9 +865,6 @@ export default function FlightDeck() {
     </div>
   </div>};
 
-  // ── Member filter bar ──
-  const MemFilter=()=>members.length>1?<div><div style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6,fontFamily:"'Fraunces',serif"}}>Filter by traveler</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><span className={`tg ${!filterM?"ts":""}`} onClick={()=>setFilterM(null)} style={{background:!filterM?`${C.accent}15`:C.bgInput,color:!filterM?C.accent:C.textMuted}}>All</span>{members.map(m=><Tag key={m.id} m={m} sel={filterM===m.id} onClick={()=>setFilterM(filterM===m.id?null:m.id)}/>)}</div></div>:null;
-
   const applyMF = (list) => filterM ? list.filter(f=>(f.travelers||[]).includes(filterM)) : list;
 
   // ── VIEWS ──
@@ -512,17 +880,10 @@ export default function FlightDeck() {
       <Stat icon={<DollarIcon/>} label="Spend" value={fmtCur(totalSpend)} sub={flights.length?`~${fmtCur(totalSpend/flights.length)}/flight`:"--"} color={C.sand}/>
       <Stat icon={<Clock size={15} color={C.navy}/>} label="Next Trip" value={nextD!=null?(nextD===0?"Today":`${nextD}d`):"--"} sub={next?`${next.departureAirport} > ${next.arrivalAirport}`:""} color={nextD!=null&&nextD<=3?C.danger:C.navy}/>
     </div>
-    <MemFilter/>
-    {upcoming.length>0&&<div><h2 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:7}}><PlaneIcon size={15} color={C.accent}/> Upcoming</h2><div style={{display:"flex",flexDirection:"column",gap:7}}>{applyMF(upcoming).slice(0,5).map((f,i)=><FC key={f.id} f={f} i={i}/>)}</div></div>}
+    <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM}/>
+    {upcoming.length>0&&<div><h2 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:7}}><PlaneIcon size={15} color={C.accent}/> Upcoming</h2><div style={{display:"flex",flexDirection:"column",gap:7}}>{applyMF(upcoming).slice(0,5).map((f,i)=><FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={setDetail}/>)}</div></div>}
     {flights.length>0&&<div><h2 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:7}}><Globe size={15} color={C.navy}/> Flight Map</h2><div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}><GlobeMap flights={flights.filter(f=>f.status!=="cancelled")}/></div></div>}
     {flights.length===0&&<div style={{textAlign:"center",padding:"44px 20px",background:C.bgCard,borderRadius:16,border:`1px solid ${C.border}`}}><SunBurst size={44} color={C.accent}/><h3 style={{fontFamily:"'Fraunces',serif",fontSize:18,fontWeight:700,marginTop:10,marginBottom:5}}>No flights yet</h3><p style={{color:C.textMuted,maxWidth:320,margin:"0 auto 16px",fontSize:13}}>Add your first flight to start tracking.</p><button className="bp" onClick={()=>{setForm({...EMPTY});setEditing(null);setView("add")}}><Plus size={14}/> Add Flight</button></div>}
-  </div>;
-
-  const Flights=()=><div className="fade-in" style={{display:"flex",flexDirection:"column",gap:12}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}><h1 style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:800}}>All Flights</h1><button className="bp" onClick={()=>{setForm({...EMPTY});setEditing(null);setView("add")}}><Plus size={14}/> Add</button></div>
-    <div style={{position:"relative"}}><Search size={14} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:C.textDim}}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search flights..." style={{paddingLeft:32}}/></div>
-    <MemFilter/>
-    <div style={{display:"flex",flexDirection:"column",gap:7}}>{applyMF(filtered).map((f,i)=><FC key={f.id} f={f} i={i}/>)}{filtered.length===0&&<div style={{textAlign:"center",padding:32,color:C.textMuted}}>{search?"No match":"No flights yet"}</div>}</div>
   </div>;
 
   const Calendar=()=><div className="fade-in" style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -548,72 +909,6 @@ export default function FlightDeck() {
     </>}
   </div>;
 
-  const Family=()=><div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
-    <h1 style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:800,display:"flex",alignItems:"center",gap:7}}><Users size={17} color={C.accent}/> Family & Settings</h1>
-    <div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,padding:16}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><div style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,fontFamily:"'Fraunces',serif"}}>Members</div><button className="bs" style={{padding:"4px 10px",fontSize:11}} onClick={()=>setShowMF(!showMF)}><Plus size={11}/> Add</button></div>
-      {showMF&&<div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"end"}}><div style={{flex:"1 1 140px"}}><label style={{fontSize:9,color:C.textDim,fontWeight:600,textTransform:"uppercase",display:"block",marginBottom:2}}>Name</label><input value={newMem.name} onChange={e=>setNewMem(p=>({...p,name:e.target.value}))} placeholder="e.g. Sarah"/></div><div style={{flex:"0 0 120px"}}><label style={{fontSize:9,color:C.textDim,fontWeight:600,textTransform:"uppercase",display:"block",marginBottom:2}}>Rel</label><select value={newMem.relationship} onChange={e=>setNewMem(p=>({...p,relationship:e.target.value}))}>{RELS.map(r=><option key={r} value={r}>{r}</option>)}</select></div><button className="bp" style={{padding:"8px 14px",fontSize:11}} onClick={addMem}><Check size={13}/></button></div>}
-      <div style={{display:"flex",flexDirection:"column",gap:5}}>{members.map(m=><div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:C.bgInput,borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{width:7,height:7,borderRadius:"50%",background:m.color}}/><span style={{fontWeight:600,fontSize:13}}>{m.name}</span><span style={{fontSize:10,color:C.textMuted,textTransform:"capitalize"}}>{m.relationship}</span></div>{m.id!=="me"&&<button style={{background:"none",border:"none",cursor:"pointer",padding:3}} onClick={()=>rmMem(m.id)}><X size={13} color={C.textDim}/></button>}</div>)}</div>
-    </div>
-    <div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,padding:16}}>
-      <div style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:10,fontFamily:"'Fraunces',serif",display:"flex",alignItems:"center",gap:4}}><Bell size={11}/> Notifications</div>
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12}}><input type="checkbox" checked={notif.enabled} onChange={e=>setNotif(p=>({...p,enabled:e.target.checked}))} style={{width:"auto",accentColor:C.accent}}/> Enable notifications</label>
-        {notif.enabled&&<><input value={notif.email} onChange={e=>setNotif(p=>({...p,email:e.target.value}))} placeholder="your@email.com" type="email" style={{maxWidth:280}}/>
-        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12}}><input type="checkbox" checked={notif.sevenDay} onChange={e=>setNotif(p=>({...p,sevenDay:e.target.checked}))} style={{width:"auto",accentColor:C.accent}}/> 7-day departure</label>
-        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12}}><input type="checkbox" checked={notif.twentyFourHr} onChange={e=>setNotif(p=>({...p,twentyFourHr:e.target.checked}))} style={{width:"auto",accentColor:C.accent}}/> 24-hour return</label>
-        <p style={{fontSize:10,color:C.textMuted,lineHeight:1.5,marginTop:2}}>Alerts appear in-app. Connect Supabase + Resend for email delivery.</p></>}
-      </div>
-    </div>
-    <div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,padding:16}}>
-      <div style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:10,fontFamily:"'Fraunces',serif"}}>Export</div>
-      <button className="bs" onClick={()=>upcoming.forEach(f=>window.open(gcalURL(f,members),"_blank"))}><CalIcon/> Sync All to Google Cal</button>
-    </div>
-  </div>;
-
-  const Add=()=>{const isE=!!editing;return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:580,margin:"0 auto",width:"100%"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h1 style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:800}}>{isE?"Edit Flight":"Add Flight"}</h1><button className="bs" onClick={()=>{setView("flights");setEditing(null);setForm({...EMPTY})}}><X size={13}/> Cancel</button></div>
-    {/* Flight Lookup */}
-    {!isE&&<div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,padding:16}}>
-      <h3 style={{fontFamily:"'Fraunces',serif",fontSize:13,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}><Search size={14} color={C.accent}/> Quick Lookup</h3>
-      <p style={{fontSize:12,color:C.textMuted,marginBottom:10}}>Enter a flight number and departure date, then hit lookup to auto-fill details.</p>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}>
-        <div style={{flex:"1 1 140px"}}><label style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:2,display:"block",fontFamily:"'Fraunces',serif"}}>Flight #</label><input value={form.flightNumber} onChange={e=>uf("flightNumber",e.target.value)} placeholder="UA2345"/></div>
-        <div style={{flex:"1 1 140px"}}><label style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:2,display:"block",fontFamily:"'Fraunces',serif"}}>Depart Date</label><input type="date" value={form.departureDate} onChange={e=>uf("departureDate",e.target.value)}/></div>
-        <button className="bp" style={{padding:"9px 18px",fontSize:12}} onClick={lookupFlight} disabled={looking}>
-          {looking?<><Loader2 size={14} style={{animation:"spin 1s linear infinite"}}/> Looking up...</>:<><RefreshCw size={14}/> Lookup</>}
-        </button>
-      </div>
-      {lookErr&&<div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,padding:"7px 10px",background:"rgba(155,48,34,0.07)",borderRadius:8}}><AlertCircle size={13} color={C.danger}/><span style={{fontSize:11,color:C.danger}}>{lookErr}</span></div>}
-      {form.departureAirport&&form.arrivalAirport&&!isE&&<div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,padding:"7px 10px",background:`${C.olive}08`,borderRadius:8}}><CheckCircle2 size={13} color={C.success}/><span style={{fontSize:11,color:C.success}}>Found: {form.departureAirport} &gt; {form.arrivalAirport}{form.departureTime?` at ${form.departureTime}`:""}</span></div>}
-    </div>}
-    {/* Form */}
-    <div style={{background:C.bgCard,borderRadius:14,border:`1px solid ${C.border}`,padding:16}}>
-      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-        <FormField label="Flight #" value={form.flightNumber} onChange={e=>uf("flightNumber",e.target.value)} placeholder="UA2345" half/>
-        <FormField label="Airline" value={form.airline} onChange={e=>uf("airline",e.target.value)} placeholder="United Airlines" half/>
-        <FormField label="From" value={form.departureAirport} onChange={e=>{uf("departureAirport",e.target.value);if(e.target.value.length===3){const d=getDist(e.target.value.toUpperCase(),(form.arrivalAirport||"").toUpperCase());if(d)uf("miles",d)}}} placeholder="JFK" half/>
-        <FormField label="To" value={form.arrivalAirport} onChange={e=>{uf("arrivalAirport",e.target.value);if(e.target.value.length===3){const d=getDist((form.departureAirport||"").toUpperCase(),e.target.value.toUpperCase());if(d)uf("miles",d)}}} placeholder="FCO" half/>
-        <FormField label="Depart Date" value={form.departureDate} onChange={e=>uf("departureDate",e.target.value)} type="date" half/>
-        <FormField label="Depart Time" value={form.departureTime} onChange={e=>uf("departureTime",e.target.value)} type="time" half/>
-        <FormField label="Arrive Date" value={form.arrivalDate} onChange={e=>uf("arrivalDate",e.target.value)} type="date" half/>
-        <FormField label="Arrive Time" value={form.arrivalTime} onChange={e=>uf("arrivalTime",e.target.value)} type="time" half/>
-        <FormField label="Dep Terminal" value={form.departureTerminal} onChange={e=>uf("departureTerminal",e.target.value)} placeholder="1" half/>
-        <FormField label="Arr Terminal" value={form.arrivalTerminal} onChange={e=>uf("arrivalTerminal",e.target.value)} placeholder="3" half/>
-        <FormField label="Cost (USD)" value={form.cost} onChange={e=>uf("cost",e.target.value)} type="number" placeholder="425" half/>
-        <FormField label="Miles" value={form.miles} onChange={e=>uf("miles",e.target.value)} type="number" placeholder="Auto" half/>
-        <FormField label="Confirmation" value={form.confirmationCode} onChange={e=>uf("confirmationCode",e.target.value)} placeholder="ABC123" half/>
-        <div style={{flex:"1 1 calc(50% - 5px)",minWidth:125}}>
-          <label style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:2,display:"block",fontFamily:"'Fraunces',serif"}}>Status</label>
-          <select value={form.status} onChange={e=>uf("status",e.target.value)}><option value="upcoming">Upcoming</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
-        </div>
-        <div style={{flex:"1 1 100%"}}><label style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4,display:"block",fontFamily:"'Fraunces',serif"}}>Travelers</label><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{members.map(m=><Tag key={m.id} m={m} sel={(form.travelers||[]).includes(m.id)} onClick={()=>togTrav(m.id)}/>)}</div></div>
-        <div style={{flex:"1 1 100%"}}><label style={{fontSize:9,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:2,display:"block",fontFamily:"'Fraunces',serif"}}>Notes</label><textarea value={form.notes} onChange={e=>uf("notes",e.target.value)} placeholder="Notes..." rows={2} style={{resize:"vertical",minHeight:44}}/></div>
-      </div>
-      <div style={{display:"flex",gap:6,marginTop:12,justifyContent:"flex-end"}}><button className="bs" onClick={()=>{setView("flights");setEditing(null);setForm({...EMPTY})}}>Cancel</button><button className="bp" onClick={save} disabled={!form.departureDate&&!form.flightNumber}><Check size={13}/> {isE?"Update":"Save"}</button></div>
-    </div>
-  </div>};
-
   if(!loaded) return <div style={{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh",background:C.bg}}><Loader2 size={24} color={C.accent} style={{animation:"spin 1s linear infinite"}}/></div>;
 
   return <div style={{minHeight:"100vh",background:C.bg}}>
@@ -630,11 +925,56 @@ export default function FlightDeck() {
     </nav>
     <main style={{maxWidth:820,margin:"0 auto",padding:"20px 12px 80px"}}>
       {view==="dashboard"&&<Dashboard/>}
-      {view==="flights"&&<Flights/>}
+      {view==="flights"&&(
+        <FlightsView
+          search={search}
+          setSearch={setSearch}
+          filtered={filtered}
+          applyMF={applyMF}
+          members={members}
+          filterM={filterM}
+          setFilterM={setFilterM}
+          onOpenDetail={setDetail}
+          onAdd={() => {
+            setForm({ ...EMPTY });
+            setEditing(null);
+            setView("add");
+          }}
+        />
+      )}
       {view==="calendar"&&<Calendar/>}
       {view==="review"&&<Review/>}
-      {view==="family"&&<Family/>}
-      {view==="add"&&<Add/>}
+      {view==="family"&&(
+        <FamilyView
+          showMF={showMF}
+          setShowMF={setShowMF}
+          newMem={newMem}
+          setNewMem={setNewMem}
+          addMem={addMem}
+          members={members}
+          rmMem={rmMem}
+          notif={notif}
+          setNotif={setNotif}
+          upcoming={upcoming}
+          gcalURL={gcalURL}
+        />
+      )}
+      {view==="add"&&(
+        <AddFlightForm
+          editing={editing}
+          form={form}
+          uf={uf}
+          lookupFlight={lookupFlight}
+          looking={looking}
+          lookErr={lookErr}
+          members={members}
+          togTrav={togTrav}
+          save={save}
+          setView={setView}
+          setEditing={setEditing}
+          setForm={setForm}
+        />
+      )}
     </main>
     {detail&&<DM f={detail}/>}
   </div>;
