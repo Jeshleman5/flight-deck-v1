@@ -949,29 +949,33 @@ export default function FlightDeck() {
   const userName = session?.user?.user_metadata?.full_name || session?.user?.email || '';
 
   // ── Load flights from Supabase when user signs in ──
-  useEffect(() => {
-    if (!userId) { setLoaded(true); return; }
-    (async () => {
-      const { data, error } = await supabase
-        .from('flights')
-        .select('*')
-        .eq('user_id', userId)
-        .order('departure_date', { ascending: true });
-      if (!error && data) {
-        setFlights(data.map(fromDb));
-      }
-      // Load members/notif from localStorage (local prefs for now)
-      try {
-        const raw = localStorage.getItem('fd-local');
-        if (raw) {
-          const d = JSON.parse(raw);
-          if (d.members) setMembers(d.members);
-          if (d.notif) setNotif(d.notif);
-        }
-      } catch {}
-      setLoaded(true);
-    })();
-  }, [userId]);
+// ── Load local prefs (members, notif) on mount ──
+useEffect(() => {
+  try {
+    const raw = localStorage.getItem('fd-local');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.members) setMembers(d.members);
+      if (d.notif) setNotif(d.notif);
+    }
+  } catch {}
+}, []);
+
+// ── Load flights from Supabase when user signs in ──
+useEffect(() => {
+  if (!userId) { setLoaded(true); return; }
+  (async () => {
+    const { data, error } = await supabase
+      .from('flights')
+      .select('*')
+      .eq('user_id', userId)
+      .order('departure_date', { ascending: true });
+    if (!error && data) {
+      setFlights(data.map(fromDb));
+    }
+    setLoaded(true);
+  })();
+}, [userId]);
 
   // ── Save members/notif to localStorage (local prefs) ──
   useEffect(() => {
