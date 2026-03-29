@@ -145,15 +145,15 @@ function extractDate(isoString) {
   } catch {
     return "";
   }
-  function figureArrivalDate(depDate, depTime, arrTime) {
-    if (!depDate) return "";
-    if (!depTime || !arrTime) return depDate;
-    // If arrival time is earlier than departure time, it's an overnight flight
-    if (arrTime < depTime) {
-      const d = new Date(depDate + "T00:00:00");
-      d.setDate(d.getDate() + 1);
-      return d.toISOString().split("T")[0];
-    }
-    return depDate;
+}
+
+function figureArrivalDate(depDate, depTime, arrTime) {
+  if (!depDate) return "";
+  if (!depTime || !arrTime) return depDate;
+  if (arrTime < depTime) {
+    const d = new Date(depDate + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
   }
+  return depDate;
 }
