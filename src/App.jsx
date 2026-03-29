@@ -228,7 +228,7 @@ const dlICS = (f,mem) => {
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));a.download=`${f.flightNumber||"flight"}.ics`;a.click();
 };
 
-const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:["me"]};
+const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:["me"],tripName:""};
 const DEF_MEM = [{id:"me",name:"Me",relationship:"self",color:C.accent}];
 const RELS = ["self","spouse","parent","in-law","sibling","child","other"];
 const REL_COL = {self:C.accent,spouse:C.olive,parent:C.navy,"in-law":C.sand,sibling:"#7B6B8D",child:"#6B8D7B",other:C.textMuted};
@@ -339,6 +339,7 @@ function FlightCard({ f, i = 0, members, onOpenDetail }) {
             {f.departureTime && <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{f.departureTime}{f.arrivalTime ? ` — ${f.arrivalTime}` : ""}</span>}
           </div>
           {tv.length > 0 && <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>{tv.map((m) => <span key={m.id} style={{ fontSize: 9, color: m.color, background: `${m.color}10`, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{m.name}</span>)}</div>}
+          {f.tripName && <div style={{ marginTop: 4 }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>{f.tripName}</span></div>}
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
           {f.flightNumber && <div style={{ textAlign: "center" }}><div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Flight</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.navy }}>{f.flightNumber}</div></div>}
@@ -367,7 +368,65 @@ function MemFilterBar({ members, filterM, setFilterM }) {
 }
 
 /* ── FlightsView ────────────────────────────────────── */
+/* ── Trip Group Card ─────────────────────────────────── */
+function TripGroup({ tripName, flights, members, onOpenDetail }) {
+  const sorted = [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
+  const first = sorted[0], last = sorted[sorted.length - 1];
+  const totalCost = flights.reduce((s, f) => s + (parseFloat(f.cost) || 0), 0);
+  const totalMiles = flights.reduce((s, f) => s + (parseInt(f.miles) || 0), 0);
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: expanded ? `1px solid ${C.border}` : "none" }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <span style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: C.text }}>{tripName}</span>
+            <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600 }}>{flights.length} {flights.length === 1 ? "leg" : "legs"}</span>
+          </div>
+          <div style={{ display: "flex", gap: 12, fontSize: 11, color: C.textMuted }}>
+            <span>{fmtShort(first?.departureDate)} — {fmtShort(last?.arrivalDate || last?.departureDate)}</span>
+            <span>{first?.departureAirport} → {last?.arrivalAirport}</span>
+            {totalCost > 0 && <span>{fmtCur(totalCost)}</span>}
+            {totalMiles > 0 && <span>{comma(totalMiles)} mi</span>}
+          </div>
+        </div>
+        <ChevronRight size={16} color={C.textDim} style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
+      </div>
+      {expanded && (
+        <div style={{ padding: "8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {sorted.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd }) {
+  const displayFlights = applyMF(filtered);
+
+  // Group by tripName
+  const { trips, ungrouped } = useMemo(() => {
+    const tripMap = {};
+    const ungrouped = [];
+    displayFlights.forEach(f => {
+      if (f.tripName) {
+        if (!tripMap[f.tripName]) tripMap[f.tripName] = [];
+        tripMap[f.tripName].push(f);
+      } else {
+        ungrouped.push(f);
+      }
+    });
+    // Sort trips by earliest departure date
+    const trips = Object.entries(tripMap)
+      .map(([name, flights]) => ({ name, flights }))
+      .sort((a, b) => (a.flights[0]?.departureDate || "").localeCompare(b.flights[0]?.departureDate || ""));
+    return { trips, ungrouped };
+  }, [displayFlights]);
+
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -379,9 +438,10 @@ function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, s
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search flights..." style={{ paddingLeft: 32 }} />
       </div>
       <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {applyMF(filtered).map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}
-        {filtered.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} />)}
+        {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}
+        {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
       </div>
     </div>
   );
@@ -493,6 +553,9 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
           <div style={{ flex: "1 1 calc(50% - 5px)", minWidth: 125 }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Status</label>
             <select value={form.status} onChange={(e) => uf("status", e.target.value)}><option value="upcoming">Upcoming</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+          </div>
+          <div style={{ flex: "1 1 100%" }}>
+            <FormField label="Trip Name" value={form.tripName} onChange={(e) => uf("tripName", e.target.value)} placeholder="e.g. Geneva June 2026" />
           </div>
           <div style={{ flex: "1 1 100%" }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Travelers</label>
@@ -758,6 +821,7 @@ const toDb = (f, userId) => ({
   status: f.status || 'upcoming',
   tags: f.travelers || [],
   traveler: (f.travelers || []).join(','),
+  trip_name: f.tripName || '',
 });
 
 const fromDb = (r) => ({
@@ -778,6 +842,7 @@ const fromDb = (r) => ({
   notes: r.notes || '',
   status: r.status || 'upcoming',
   travelers: r.tags || [],
+  tripName: r.trip_name || '',
 });
 
 /* ── Sign In Screen ───────────────────────────────────── */
@@ -1047,7 +1112,7 @@ export default function FlightDeck() {
 
   // ── Computed ──
   const sorted = useMemo(() => [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || "")), [flights]);
-  const filtered = useMemo(() => { let r = sorted; if (filterM) r = r.filter(f => (f.travelers || []).includes(filterM)); if (search) r = r.filter(f => [f.airline, f.flightNumber, f.departureAirport, f.arrivalAirport, f.confirmationCode, f.notes].filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))); return r }, [sorted, filterM, search]);
+  const filtered = useMemo(() => { let r = sorted; if (filterM) r = r.filter(f => (f.travelers || []).includes(filterM)); if (search) r = r.filter(f => [f.airline, f.flightNumber, f.departureAirport, f.arrivalAirport, f.confirmationCode, f.notes, f.tripName].filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))); return r }, [sorted, filterM, search]);
   const upcoming = useMemo(() => sorted.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0), [sorted]);
   const totalSpend = useMemo(() => flights.reduce((s, f) => s + (f.cost || 0), 0), [flights]);
   const totalMiles = useMemo(() => flights.filter(f => f.status !== "cancelled").reduce((s, f) => s + (f.miles || 0), 0), [flights]);
