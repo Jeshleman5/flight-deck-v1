@@ -1,95 +1,148 @@
-/**
- * Vercel serverless: proxies flight lookup to Anthropic (API key stays server-side).
- * Set ANTHROPIC_API_KEY in Vercel project Environment Variables.
- */
+// Vercel Serverless Function — flight lookup
+// Priority: AviationStack (precise times) → Claude web search (fallback)
+
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    return res.status(503).json({
-      ok: false,
-      error: "Flight lookup is not configured. Add ANTHROPIC_API_KEY to your Vercel project environment variables.",
-    });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  let body = req.body;
-  if (typeof body === "string") {
+  const { flightNumber, departureDate } = req.body || {};
+  if (!flightNumber) return res.status(400).json({ error: "flightNumber is required" });
+
+  // Parse airline code and flight num from input like "LX 23" or "LX23"
+  const cleaned = flightNumber.replace(/\s+/g, "").toUpperCase();
+  const match = cleaned.match(/^([A-Z]{2}|\d[A-Z]|[A-Z]\d)(\d+)$/);
+  const airlineCode = match ? match[1] : "";
+  const flightNum = match ? match[2] : cleaned;
+
+  // ── Try AviationStack first ──
+  const avKey = process.env.AVIATIONSTACK_API_KEY;
+  if (avKey) {
     try {
-      body = JSON.parse(body || "{}");
-    } catch {
-      return res.status(400).json({ ok: false, error: "Invalid JSON body" });
+      // Note: AviationStack free tier only supports HTTP, not HTTPS
+      const avUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${airlineCode}${flightNum}&limit=1`;
+      const avResp = await fetch(avUrl);
+      const avData = await avResp.json();
+
+      if (avData.data && avData.data.length > 0) {
+        const f = avData.data[0];
+
+        const flight = {
+          airline: f.airline?.iata || airlineCode,
+          airlineName: f.airline?.name || "",
+          flightNumber: flightNumber,
+          departureAirport: f.departure?.iata || "",
+          departureCity: f.departure?.airport || "",
+          arrivalAirport: f.arrival?.iata || "",
+          arrivalCity: f.arrival?.airport || "",
+          departureDate: departureDate || f.flight_date || "",
+          departureTime: extractTime(f.departure?.scheduled),
+          arrivalDate: extractDate(f.arrival?.scheduled) || departureDate || "",
+          arrivalTime: extractTime(f.arrival?.scheduled),
+          departureTerminal: f.departure?.terminal || "",
+          arrivalTerminal: f.arrival?.terminal || "",
+          status: f.flight_status || "scheduled",
+          source: "aviationstack",
+        };
+
+        return res.status(200).json({ flight });
+      }
+    } catch (err) {
+      console.error("AviationStack error:", err.message);
+      // Fall through to Claude fallback
     }
   }
 
-  const flightNumber = (body?.flightNumber || "").trim();
-  const departureDate = (body?.departureDate || "").trim();
-  if (!flightNumber || !departureDate) {
-    return res.status(400).json({ ok: false, error: "flightNumber and departureDate are required" });
+  // ── Fallback: Claude web search ──
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({
+      error: "No API keys configured. Add AVIATIONSTACK_API_KEY or ANTHROPIC_API_KEY in Vercel settings.",
+    });
   }
 
+  const prompt = `Look up flight ${flightNumber}${departureDate ? ` on ${departureDate}` : " (today or next scheduled)"}.
+
+Return ONLY a JSON object with these fields (no markdown, no explanation, no backticks):
+{
+  "airline": "2-letter IATA code (e.g. UA, AA, DL)",
+  "airlineName": "Full airline name",
+  "flightNumber": "Full flight number as entered",
+  "departureAirport": "3-letter IATA code",
+  "departureCity": "City name",
+  "arrivalAirport": "3-letter IATA code",
+  "arrivalCity": "City name",
+  "departureDate": "YYYY-MM-DD",
+  "departureTime": "HH:MM (24hr local time)",
+  "arrivalDate": "YYYY-MM-DD",
+  "arrivalTime": "HH:MM (24hr local time)",
+  "departureTerminal": "Terminal if known, empty string if not",
+  "arrivalTerminal": "Terminal if known, empty string if not",
+  "status": "scheduled/on-time/delayed/cancelled if known"
+}
+
+If you cannot find this flight, return: {"error": "Flight not found"}`;
+
   try {
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": key,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        max_tokens: 1024,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [
-          {
-            role: "user",
-            content: `Look up flight ${flightNumber} on ${departureDate}. Find the departure airport (IATA), arrival airport (IATA), scheduled departure time (24h HH:MM), scheduled arrival time (24h HH:MM), arrival date (YYYY-MM-DD), departure terminal, arrival terminal, and airline name. Return ONLY a JSON object (no markdown, no explanation): {"airline":"str|null","departureAirport":"IATA|null","arrivalAirport":"IATA|null","departureTime":"HH:MM|null","arrivalTime":"HH:MM|null","arrivalDate":"YYYY-MM-DD|null","departureTerminal":"str|null","arrivalTerminal":"str|null"}`,
-          },
-        ],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
 
-    const data = await upstream.json();
-
-    if (!upstream.ok) {
-      const msg =
-        data?.error?.message ||
-        data?.message ||
-        `Anthropic API error (${upstream.status})`;
-      return res.status(502).json({ ok: false, error: msg });
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error("Anthropic API error:", response.status, errBody);
+      return res.status(502).json({ error: `Anthropic API returned ${response.status}` });
     }
 
-    const texts = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    const clean = texts.replace(/```json|```/g, "").trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return res.status(422).json({
-        ok: false,
-        error: "Couldn't find flight details. Check the flight number and date.",
-      });
-    }
+    const data = await response.json();
+    const textBlocks = (data.content || []).filter((b) => b.type === "text");
+    const rawText = textBlocks.map((b) => b.text).join("\n");
 
-    let parsed;
     try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch {
-      return res.status(422).json({
-        ok: false,
-        error: "Couldn't parse flight details from the response.",
-      });
+      const cleanedText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const flight = JSON.parse(cleanedText);
+      flight.source = "claude";
+      return res.status(200).json({ flight });
+    } catch (parseErr) {
+      return res.status(200).json({ flight: null, raw: rawText, parseError: "Could not parse flight data" });
     }
+  } catch (err) {
+    console.error("Lookup error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+}
 
-    return res.status(200).json({ ok: true, flight: parsed });
-  } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "Lookup failed",
-    });
+// ── Helpers ──
+function extractTime(isoString) {
+  if (!isoString) return "";
+  try {
+    const timePart = isoString.split("T")[1];
+    if (!timePart) return "";
+    return timePart.substring(0, 5);
+  } catch {
+    return "";
+  }
+}
+
+function extractDate(isoString) {
+  if (!isoString) return "";
+  try {
+    return isoString.split("T")[0];
+  } catch {
+    return "";
   }
 }
