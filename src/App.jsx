@@ -997,7 +997,7 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
         </div>
       )}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <div className="form-wrap" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <FormField label="Flight #" value={form.flightNumber} onChange={(e) => uf("flightNumber", e.target.value)} placeholder="UA2345" half />
           <FormField label="Airline" value={form.airline} onChange={(e) => uf("airline", e.target.value)} placeholder="United Airlines" half />
           <FormField label="From" value={form.departureAirport} onChange={(e) => { uf("departureAirport", e.target.value); if (e.target.value.length === 3) { const d = getDist(e.target.value.toUpperCase(), (form.arrivalAirport || "").toUpperCase()); if (d) uf("miles", d); }}} placeholder="JFK" half />
@@ -1136,7 +1136,7 @@ function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, a
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Stat icon={<PlaneIcon size={15} color={C.olive} />} label="Upcoming" value={upcoming.length} sub={next ? `Next: ${fmtShort(next.departureDate)}` : "None"} color={C.olive} />
         <Stat icon={<CompassRose size={15} color={C.accent} />} label="Total Miles" value={comma(totalMiles)} sub={`${flights.length} flights`} color={C.accent} />
-        <Stat icon={<DollarIcon />} label="Spend" value={fmtCur(totalSpend)} sub={flights.length ? `~${fmtCur(totalSpend / flights.length)}/flight` : "--"} color={C.sand} />
+        <Stat icon={<DollarIcon />} label="Spend" value={fmtCur(totalSpend)} sub={`${[...new Set(flights.map(f => f.tripName).filter(Boolean))].length || 0} trips`} color={C.sand} />
         <Stat icon={<Clock size={15} color={C.navy} />} label="Next Trip" value={nextD != null ? (nextD === 0 ? "Today" : `${nextD}d`) : "--"} sub={next ? `${next.departureAirport} > ${next.arrivalAirport}` : ""} color={nextD != null && nextD <= 3 ? C.danger : C.navy} />
       </div>
       <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
@@ -1257,7 +1257,7 @@ const styles = `
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:${C.bg};font-family:'DM Sans',sans-serif;color:${C.text}}
   ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${C.border};border-radius:3px}
-  input,select,textarea{background:${C.bgInput};border:1px solid ${C.border};color:${C.text};border-radius:10px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:14px;width:100%;outline:none;transition:border-color 0.2s}
+  input,select,textarea{background:${C.bgInput};border:1px solid ${C.border};color:${C.text};border-radius:10px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:14px;width:100%;max-width:100%;outline:none;transition:border-color 0.2s}
   input:focus,select:focus,textarea:focus{border-color:${C.accent}}
   input::placeholder,textarea::placeholder{color:${C.textDim}}
   select option{background:${C.bgCard}}
@@ -1282,6 +1282,11 @@ const styles = `
   .tg{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;border:1.5px solid transparent;user-select:none}
   .tg:hover{opacity:0.85}.ts{border-color:currentColor!important}
   @media(max-width:768px){.hm{display:none!important}.gr{grid-template-columns:1fr!important}}
+  @media(max-width:480px){
+    input[type="date"],input[type="time"]{font-size:12px;padding:8px 6px}
+    .form-wrap{gap:6px!important}
+    .form-wrap>div{flex:1 1 100%!important;min-width:0!important}
+  }
 `;
 
 /* ── DB Field Mapping ─────────────────────────────────── */
@@ -1803,7 +1808,11 @@ useEffect(() => {
   const yAL = useMemo(() => [...new Set(yf.map(f => airlineName(f.flightNumber)).filter(v => v && v.length > 2))], [yf]);
   const topAP = useMemo(() => { const c = {}; yf.forEach(f => { [f.departureAirport, f.arrivalAirport].filter(Boolean).forEach(a => { c[a] = (c[a] || 0) + 1 }) }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || "--" }, [yf]);
   const calFBD = useMemo(() => { const m = {}; flights.forEach(f => { if (f.departureDate) { if (!m[f.departureDate]) m[f.departureDate] = []; m[f.departureDate].push(f) } }); return m }, [flights]);
-  const tripNames = useMemo(() => [...new Set([...flights, ...familyFlights].map(f => f.tripName).filter(Boolean))].sort(), [flights, familyFlights]);
+  const tripNames = useMemo(() => {
+    const allFlights = [...flights, ...familyFlights];
+    const upcoming = allFlights.filter(f => f.tripName && (daysTo(f.departureDate) === null || daysTo(f.departureDate) >= -7));
+    return [...new Set(upcoming.map(f => f.tripName))].sort();
+  }, [flights, familyFlights]);
 
   const alerts = useMemo(() => { if (!notif.enabled) return []; const a = []; flights.forEach(f => { if (f.status !== "upcoming") return; if (notif.sevenDay && daysTo(f.departureDate) === 7) a.push({ t: "d7", f }); if (notif.twentyFourHr && daysTo(f.arrivalDate) === 1) a.push({ t: "r24", f }) }); return a }, [flights, notif]);
 
