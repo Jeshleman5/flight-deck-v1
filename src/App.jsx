@@ -758,17 +758,55 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
       {/* ── Connected Family ─── */}
       {connectedMembers.length > 0 && (
         <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-          <div style={{ fontSize: 9, color: C.navy, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Globe size={11} /> Connected Family</div>
-          <p style={{ fontSize: 11, color: C.textMuted, marginBottom: 10 }}>{connectedMembers.length} family member{connectedMembers.length !== 1 ? "s" : ""} connected · {familyFlights.length} shared flight{familyFlights.length !== 1 ? "s" : ""}</p>
-          {familyFlights.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0).slice(0, 5).map((f, i) => (
-            <div key={f.id || i} style={{ padding: "8px 10px", background: C.bgInput, borderRadius: 9, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{f.departureAirport} → {f.arrivalAirport}</span>
-                <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 8 }}>{fmtShort(f.departureDate)}</span>
+          <div style={{ fontSize: 9, color: C.navy, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Globe size={11} /> Connected Family</div>
+          {connectedMembers.map(member => {
+            const mFlights = familyFlights.filter(f => f.userId === member.user_id);
+            const upcoming = mFlights.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0);
+            const nextFlight = upcoming[0];
+            const firstName = (member.name || "").split(" ")[0] || "Member";
+            return (
+              <div key={member.user_id} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  {member.avatar_url ? (
+                    <img src={member.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${C.border}` }} />
+                  ) : (
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.navySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.navy }}>{firstName[0]}</div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, fontFamily: "'Fraunces',serif" }}>{member.name}</div>
+                    <div style={{ fontSize: 10, color: C.textMuted }}>
+                      {upcoming.length > 0
+                        ? `${upcoming.length} upcoming trip${upcoming.length !== 1 ? "s" : ""}`
+                        : "No upcoming travel"}
+                    </div>
+                  </div>
+                </div>
+                {upcoming.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 36 }}>
+                    {upcoming.slice(0, 5).map((f, i) => {
+                      const depD = daysTo(f.departureDate);
+                      const awayUntil = f.arrivalDate || f.departureDate;
+                      return (
+                        <div key={f.id || i} style={{ padding: "8px 12px", background: C.bgInput, borderRadius: 9, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{f.departureAirport} → {f.arrivalAirport}</span>
+                              {f.flightNumber && <span style={{ fontSize: 10, color: C.navy, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{f.flightNumber}</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+                              {fmtShort(f.departureDate)} — {fmtShort(awayUntil)}
+                              {depD != null && depD >= 0 && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: depD <= 3 ? C.danger : C.accent, fontFamily: "'JetBrains Mono',monospace" }}>{depD === 0 ? "TODAY" : depD === 1 ? "TMW" : `in ${depD}d`}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {upcoming.length > 5 && <div style={{ fontSize: 10, color: C.textMuted, paddingLeft: 12 }}>+{upcoming.length - 5} more</div>}
+                  </div>
+                )}
               </div>
-              {f.flightNumber && <span style={{ fontSize: 10, color: C.navy, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{f.flightNumber}</span>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1432,16 +1470,24 @@ useEffect(() => {
           .in('family_group_id', groupIds)
           .neq('user_id', userId);
         if (allMembers && allMembers.length > 0) {
-          // Get their profile info
           const memberIds = [...new Set(allMembers.map(m => m.user_id))];
-          setConnectedMembers(allMembers);
-          // Load their flights
+          // Get their profile info (name, email, avatar)
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, display_name, email, avatar_url')
+            .in('id', memberIds);
+          const enriched = allMembers.map(m => {
+            const p = (profiles || []).find(pr => pr.id === m.user_id) || {};
+            return { ...m, name: p.display_name || p.email || 'Family Member', email: p.email || '', avatar_url: p.avatar_url || '' };
+          });
+          setConnectedMembers(enriched);
+          // Load their flights (keep user_id for grouping)
           const { data: fFlights } = await supabase
             .from('flights')
             .select('*')
             .in('user_id', memberIds)
             .order('departure_date', { ascending: true });
-          if (fFlights) setFamilyFlights(fFlights.map(fromDb));
+          if (fFlights) setFamilyFlights(fFlights.map(r => ({ ...fromDb(r), userId: r.user_id })));
         }
       }
     })();
