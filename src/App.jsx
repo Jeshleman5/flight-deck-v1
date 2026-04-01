@@ -628,12 +628,21 @@ function MemFilterBar({ members, filterM, setFilterM }) {
 
 /* ── FlightsView ────────────────────────────────────── */
 /* ── Trip Group Card ─────────────────────────────────── */
-function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refreshingId, onRefresh }) {
+function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refreshingId, onRefresh, connectedMembers, onShareTrip }) {
   const sorted = [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
   const first = sorted[0], last = sorted[sorted.length - 1];
   const totalCost = flights.reduce((s, f) => s + (parseFloat(f.cost) || 0), 0);
   const totalMiles = flights.reduce((s, f) => s + (parseInt(f.miles) || 0), 0);
   const [expanded, setExpanded] = useState(true);
+  const [showShare, setShowShare] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  const handleShare = async (member) => {
+    setSharing(true);
+    await onShareTrip(sorted, member.user_id);
+    setSharing(false);
+    setShowShare(false);
+  };
 
   return (
     <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -653,8 +662,41 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
             {totalMiles > 0 && <span>{comma(totalMiles)} mi</span>}
           </div>
         </div>
-        <ChevronRight size={16} color={C.textDim} style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {connectedMembers && connectedMembers.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowShare(!showShare); }}
+              className="bs"
+              style={{ padding: "4px 10px", fontSize: 10, display: "flex", alignItems: "center", gap: 4 }}
+            >
+              <Users size={11} /> Share
+            </button>
+          )}
+          <ChevronRight size={16} color={C.textDim} style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
+        </div>
       </div>
+      {showShare && (
+        <div style={{ padding: "8px 16px", borderBottom: `1px solid ${C.border}`, background: C.bgWarm }}>
+          <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontFamily: "'Fraunces',serif" }}>Share trip with</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {connectedMembers.map(m => (
+              <div key={m.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {m.avatar_url ? (
+                    <img src={m.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: "50%" }} />
+                  ) : (
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.navySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: C.navy }}>{(m.name || "?")[0]}</div>
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{m.name}</span>
+                </div>
+                <button className="bp" style={{ padding: "4px 12px", fontSize: 10 }} onClick={() => handleShare(m)} disabled={sharing}>
+                  {sharing ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <><PlaneIcon size={11} color="#FFFDF8" /> Send</>}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {expanded && (
         <div style={{ padding: "8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
           {sorted.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
@@ -664,7 +706,7 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
   );
 }
 
-function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
+function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh, connectedMembers, onShareTrip }) {
   const displayFlights = applyMF(filtered);
 
   // Group by tripName
@@ -698,7 +740,7 @@ function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, s
       </div>
       <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
+        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} connectedMembers={connectedMembers} onShareTrip={onShareTrip} />)}
         {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
         {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
       </div>
@@ -933,7 +975,7 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
 }
 
 /* ── AddFlightForm ──────────────────────────────────── */
-function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, members, togTrav, save, setView, setEditing, setForm, tripNames }) {
+function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, members, togTrav, save, setView, setEditing, setForm, tripNames, connectedMembers, shareWith, setShareWith }) {
   const isE = !!editing;
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 580, margin: "0 auto", width: "100%" }}>
@@ -986,6 +1028,28 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Travelers</label>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{members.map((m) => <Tag key={m.id} m={m} sel={(form.travelers || []).includes(m.id)} onClick={() => togTrav(m.id)} />)}</div>
           </div>
+          {connectedMembers && connectedMembers.length > 0 && (
+            <div style={{ flex: "1 1 100%" }}>
+              <label style={{ fontSize: 9, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Share with Family</label>
+              <p style={{ fontSize: 10, color: C.textMuted, marginBottom: 6 }}>Selected people get a copy of this flight on their dashboard.</p>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {connectedMembers.map(m => {
+                  const sel = (shareWith || []).includes(m.user_id);
+                  return (
+                    <span key={m.user_id} onClick={() => setShareWith(prev => sel ? prev.filter(id => id !== m.user_id) : [...(prev || []), m.user_id])}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", border: sel ? `1.5px solid ${C.navy}` : "1.5px solid transparent", background: sel ? C.navySoft : `${C.textMuted}12`, color: sel ? C.navy : C.textMuted }}>
+                      {m.avatar_url ? (
+                        <img src={m.avatar_url} alt="" style={{ width: 16, height: 16, borderRadius: "50%" }} />
+                      ) : (
+                        <span style={{ width: 16, height: 16, borderRadius: "50%", background: C.navySoft, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: C.navy }}>{(m.name || "?")[0]}</span>
+                      )}
+                      {(m.name || "").split(" ")[0]}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div style={{ flex: "1 1 100%" }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Notes</label>
             <textarea value={form.notes} onChange={(e) => uf("notes", e.target.value)} placeholder="Notes..." rows={2} style={{ resize: "vertical", minHeight: 44 }} />
@@ -1670,8 +1734,13 @@ useEffect(() => {
         .single();
       if (!error && data) {
         setFlights(p => [...p, fromDb(data)]);
+        // Share with selected family members
+        if (shareWith && shareWith.length > 0) {
+          await Promise.all(shareWith.map(targetId => shareTripWith([f], targetId)));
+        }
       }
     }
+    setShareWith([]);
     setForm({ ...EMPTY });
     setView("flights");
   }, [form, editing, userId]);
@@ -1739,6 +1808,32 @@ useEffect(() => {
       setInviteLoading(false);
     }
   }, [inviteEmail, familyGroupId, userId]);
+
+  // ── Share Trip With Family Member ──
+  const [shareWith, setShareWith] = useState([]);
+
+  const shareTripWith = useCallback(async (flights, targetUserId) => {
+    for (const f of flights) {
+      const flightData = {
+        flight_number: f.flightNumber || '',
+        airline: f.airline || '',
+        departure_airport: (f.departureAirport || '').toUpperCase(),
+        arrival_airport: (f.arrivalAirport || '').toUpperCase(),
+        departure_date: f.departureDate || '',
+        departure_time: f.departureTime || '',
+        arrival_date: f.arrivalDate || '',
+        arrival_time: f.arrivalTime || '',
+        departure_terminal: f.departureTerminal || '',
+        arrival_terminal: f.arrivalTerminal || '',
+        miles: f.miles ? parseInt(f.miles) : 0,
+        trip_name: f.tripName || '',
+      };
+      await supabase.rpc('share_flight', {
+        p_target_user_id: targetUserId,
+        p_flight: flightData,
+      });
+    }
+  }, []);
 
   const togTrav = useCallback((id) => setForm(p => ({ ...p, travelers: (p.travelers || []).includes(id) ? (p.travelers || []).filter(t => t !== id) : [...(p.travelers || []), id] })), []);
 
@@ -1816,6 +1911,7 @@ useEffect(() => {
             applyMF={applyMF} members={members} filterM={filterM}
             setFilterM={setFilterM} onOpenDetail={setDetail} onAdd={handleAdd}
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
+            connectedMembers={connectedMembers} onShareTrip={shareTripWith}
           />
         )}
         {view === "calendar" && (
@@ -1849,6 +1945,7 @@ useEffect(() => {
             members={members} togTrav={togTrav} save={save}
             setView={setView} setEditing={setEditing} setForm={setForm}
             tripNames={tripNames}
+            connectedMembers={connectedMembers} shareWith={shareWith} setShareWith={setShareWith}
           />
         )}
       </main>
