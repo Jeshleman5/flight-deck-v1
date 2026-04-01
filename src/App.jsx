@@ -707,13 +707,75 @@ function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, s
 }
 
 /* ── FamilyView ─────────────────────────────────────── */
-function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmMem, notif, setNotif, upcoming, members2 }) {
+function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmMem, notif, setNotif, upcoming, members2, inviteEmail, setInviteEmail, inviteLoading, sendInvite, inviteLink, invites, connectedMembers, familyFlights }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}><Users size={17} color={C.accent} /> Family & Settings</h1>
+
+      {/* ── Invite Family (V2) ─── */}
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.accent}30`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Mail size={11} /> Invite Family</div>
+        <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>Invite someone by Gmail. When they sign in, they'll see your flights and you'll see theirs.</p>
+        <div style={{ display: "flex", gap: 6, alignItems: "end", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 200px" }}>
+            <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@gmail.com" type="email" />
+          </div>
+          <button className="bp" style={{ padding: "10px 18px", fontSize: 12 }} onClick={sendInvite} disabled={inviteLoading || !inviteEmail.trim()}>
+            {inviteLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Mail size={13} />} Invite
+          </button>
+        </div>
+        {inviteLink && (
+          <div style={{ marginTop: 10, padding: "10px 12px", background: C.oliveSoft, borderRadius: 10, border: `1px solid ${C.olive}30` }}>
+            <div style={{ fontSize: 10, color: C.olive, fontWeight: 700, marginBottom: 4 }}>Invite link created! Share it with them:</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input value={inviteLink} readOnly style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", flex: 1 }} onClick={(e) => e.target.select()} />
+              <button className="bs" style={{ padding: "6px 10px", fontSize: 10, whiteSpace: "nowrap" }} onClick={() => { navigator.clipboard.writeText(inviteLink); }}>Copy</button>
+            </div>
+          </div>
+        )}
+        {invites.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontFamily: "'Fraunces',serif" }}>Sent Invites</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {invites.map(inv => (
+                <div key={inv.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: C.bgInput, borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Mail size={11} color={C.textMuted} />
+                    <span style={{ fontSize: 12 }}>{inv.invited_email}</span>
+                  </div>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 8, fontFamily: "'Fraunces',serif", textTransform: "uppercase",
+                    background: inv.status === "accepted" ? C.oliveSoft : C.sandSoft,
+                    color: inv.status === "accepted" ? C.olive : "#96783C",
+                  }}>{inv.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Connected Family ─── */}
+      {connectedMembers.length > 0 && (
+        <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+          <div style={{ fontSize: 9, color: C.navy, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Globe size={11} /> Connected Family</div>
+          <p style={{ fontSize: 11, color: C.textMuted, marginBottom: 10 }}>{connectedMembers.length} family member{connectedMembers.length !== 1 ? "s" : ""} connected · {familyFlights.length} shared flight{familyFlights.length !== 1 ? "s" : ""}</p>
+          {familyFlights.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0).slice(0, 5).map((f, i) => (
+            <div key={f.id || i} style={{ padding: "8px 10px", background: C.bgInput, borderRadius: 9, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{f.departureAirport} → {f.arrivalAirport}</span>
+                <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 8 }}>{fmtShort(f.departureDate)}</span>
+              </div>
+              {f.flightNumber && <span style={{ fontSize: 10, color: C.navy, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{f.flightNumber}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Traveler Labels ─── */}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, fontFamily: "'Fraunces',serif" }}>Members</div>
+          <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, fontFamily: "'Fraunces',serif" }}>Traveler Labels</div>
           <button className="bs" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setShowMF(!showMF)}><Plus size={11} /> Add</button>
         </div>
         {showMF && (
@@ -742,6 +804,8 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
           ))}
         </div>
       </div>
+
+      {/* ── Notifications ─── */}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
         <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Notifications</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -756,6 +820,8 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
           )}
         </div>
       </div>
+
+      {/* ── Export ─── */}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
         <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif" }}>Export</div>
         <button className="bs" onClick={() => upcoming.forEach((f) => window.open(gcalURL(f, members2), "_blank"))}><CalIcon /> Sync All to Google Cal</button>
@@ -1199,6 +1265,13 @@ export default function FlightDeck() {
   const [lookErr,setLookErr] = useState("");
   const [liveStatus,setLiveStatus] = useState({});
   const [refreshingId,setRefreshingId] = useState(null);
+  const [familyGroupId,setFamilyGroupId] = useState(null);
+  const [invites,setInvites] = useState([]);
+  const [inviteEmail,setInviteEmail] = useState("");
+  const [inviteLoading,setInviteLoading] = useState(false);
+  const [inviteLink,setInviteLink] = useState("");
+  const [connectedMembers,setConnectedMembers] = useState([]);
+  const [familyFlights,setFamilyFlights] = useState([]);
 
   // ── Auth: check session on mount + listen for changes ──
   useEffect(() => {
@@ -1277,6 +1350,102 @@ useEffect(() => {
     setLoaded(true);
   })();
 }, [userId]);
+
+  // ── Setup family group + check for pending invites + URL invite codes ──
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      // Ensure this user has a family group
+      const { data: gid } = await supabase.rpc('ensure_family_group', { p_user_id: userId });
+      if (gid) setFamilyGroupId(gid);
+
+      // Check for invite code in URL (e.g. ?invite=abc123)
+      const params = new URLSearchParams(window.location.search);
+      const inviteCode = params.get('invite');
+      if (inviteCode) {
+        const { data: inv } = await supabase
+          .from('invites')
+          .select('*')
+          .eq('invite_code', inviteCode)
+          .eq('status', 'pending')
+          .single();
+        if (inv) {
+          await supabase.from('family_members').upsert({
+            family_group_id: inv.family_group_id,
+            user_id: userId,
+            role: 'member',
+            label: '',
+          }, { onConflict: 'family_group_id,user_id' });
+          await supabase.from('invites').update({
+            status: 'accepted',
+            accepted_at: new Date().toISOString(),
+          }).eq('id', inv.id);
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+
+      // Check if this user has pending invites to accept
+      const userEmail = session?.user?.email;
+      if (userEmail) {
+        const { data: pending } = await supabase
+          .from('invites')
+          .select('*')
+          .eq('invited_email', userEmail)
+          .eq('status', 'pending');
+        if (pending && pending.length > 0) {
+          for (const inv of pending) {
+            // Join the inviter's family group
+            await supabase.from('family_members').upsert({
+              family_group_id: inv.family_group_id,
+              user_id: userId,
+              role: 'member',
+              label: '',
+            }, { onConflict: 'family_group_id,user_id' });
+            // Mark invite as accepted
+            await supabase.from('invites').update({
+              status: 'accepted',
+              accepted_at: new Date().toISOString(),
+            }).eq('id', inv.id);
+          }
+        }
+      }
+
+      // Load sent invites
+      const { data: sentInvites } = await supabase
+        .from('invites')
+        .select('*')
+        .eq('invited_by', userId)
+        .order('created_at', { ascending: false });
+      if (sentInvites) setInvites(sentInvites);
+
+      // Load connected family members (people in my groups)
+      const { data: myGroups } = await supabase
+        .from('family_members')
+        .select('family_group_id')
+        .eq('user_id', userId);
+      if (myGroups && myGroups.length > 0) {
+        const groupIds = myGroups.map(g => g.family_group_id);
+        const { data: allMembers } = await supabase
+          .from('family_members')
+          .select('user_id, label, role')
+          .in('family_group_id', groupIds)
+          .neq('user_id', userId);
+        if (allMembers && allMembers.length > 0) {
+          // Get their profile info
+          const memberIds = [...new Set(allMembers.map(m => m.user_id))];
+          setConnectedMembers(allMembers);
+          // Load their flights
+          const { data: fFlights } = await supabase
+            .from('flights')
+            .select('*')
+            .in('user_id', memberIds)
+            .order('departure_date', { ascending: true });
+          if (fFlights) setFamilyFlights(fFlights.map(fromDb));
+        }
+      }
+    })();
+  }, [userId, session]);
 
   // ── Save notif prefs to localStorage (members now in Supabase) ──
   useEffect(() => {
@@ -1433,6 +1602,34 @@ useEffect(() => {
     await supabase.from('travelers').delete().eq('id', id).eq('user_id', userId);
   }, [userId]);
 
+  // ── Send Invite ──
+  const sendInvite = useCallback(async () => {
+    if (!inviteEmail.trim() || !familyGroupId || !userId) return;
+    setInviteLoading(true);
+    setInviteLink("");
+    try {
+      const { data, error } = await supabase
+        .from('invites')
+        .insert({
+          family_group_id: familyGroupId,
+          invited_by: userId,
+          invited_email: inviteEmail.trim().toLowerCase(),
+        })
+        .select()
+        .single();
+      if (!error && data) {
+        const link = `${window.location.origin}?invite=${data.invite_code}`;
+        setInviteLink(link);
+        setInvites(p => [data, ...p]);
+        setInviteEmail("");
+      }
+    } catch (err) {
+      console.error("Invite error:", err);
+    } finally {
+      setInviteLoading(false);
+    }
+  }, [inviteEmail, familyGroupId, userId]);
+
   const togTrav = useCallback((id) => setForm(p => ({ ...p, travelers: (p.travelers || []).includes(id) ? (p.travelers || []).filter(t => t !== id) : [...(p.travelers || []), id] })), []);
 
   const handleNav = useCallback((id) => setView(id), []);
@@ -1529,6 +1726,10 @@ useEffect(() => {
             setNewMem={setNewMem} addMem={addMem} members={members}
             rmMem={rmMem} notif={notif} setNotif={setNotif}
             upcoming={upcoming} members2={members}
+            inviteEmail={inviteEmail} setInviteEmail={setInviteEmail}
+            inviteLoading={inviteLoading} sendInvite={sendInvite}
+            inviteLink={inviteLink} invites={invites}
+            connectedMembers={connectedMembers} familyFlights={familyFlights}
           />
         )}
         {view === "add" && (
