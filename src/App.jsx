@@ -256,6 +256,49 @@ function FormField({label, value, onChange, type="text", placeholder="", half=fa
   );
 }
 
+/* ── TripNameField (autocomplete) ────────────────────── */
+function TripNameField({ value, onChange, tripNames }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const matches = (value || "").length > 0
+    ? tripNames.filter(n => n.toLowerCase().includes(value.toLowerCase()) && n !== value)
+    : tripNames;
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ flex: "1 1 100%", position: "relative" }}>
+      <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Trip Name</label>
+      <input
+        value={value || ""}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="e.g. Geneva June 2026"
+      />
+      {open && matches.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, marginTop: 4, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(42,37,32,0.12)", maxHeight: 160, overflowY: "auto" }}>
+          {matches.map(n => (
+            <div
+              key={n}
+              onClick={() => { onChange(n); setOpen(false); }}
+              style={{ padding: "8px 14px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "background 0.15s" }}
+              onMouseEnter={(e) => e.currentTarget.style.background = C.bgWarm}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 6px", borderRadius: 6, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>trip</span>
+              {n}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── NavTab ──────────────────────────────────────────── */
 function NavTab({icon:I,label,id,ci,active,onNav}) {
   return (
@@ -506,7 +549,7 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
 }
 
 /* ── AddFlightForm ──────────────────────────────────── */
-function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, members, togTrav, save, setView, setEditing, setForm }) {
+function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, members, togTrav, save, setView, setEditing, setForm, tripNames }) {
   const isE = !!editing;
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 580, margin: "0 auto", width: "100%" }}>
@@ -554,9 +597,7 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Status</label>
             <select value={form.status} onChange={(e) => uf("status", e.target.value)}><option value="upcoming">Upcoming</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
           </div>
-          <div style={{ flex: "1 1 100%" }}>
-            <FormField label="Trip Name" value={form.tripName} onChange={(e) => uf("tripName", e.target.value)} placeholder="e.g. Geneva June 2026" />
-          </div>
+          <TripNameField value={form.tripName} onChange={(v) => uf("tripName", v)} tripNames={tripNames} />
           <div style={{ flex: "1 1 100%" }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Travelers</label>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{members.map((m) => <Tag key={m.id} m={m} sel={(form.travelers || []).includes(m.id)} onClick={() => togTrav(m.id)} />)}</div>
@@ -1129,6 +1170,7 @@ useEffect(() => {
   const yAL = useMemo(() => [...new Set(yf.map(f => airlineName(f.flightNumber)).filter(v => v && v.length > 2))], [yf]);
   const topAP = useMemo(() => { const c = {}; yf.forEach(f => { [f.departureAirport, f.arrivalAirport].filter(Boolean).forEach(a => { c[a] = (c[a] || 0) + 1 }) }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || "--" }, [yf]);
   const calFBD = useMemo(() => { const m = {}; flights.forEach(f => { if (f.departureDate) { if (!m[f.departureDate]) m[f.departureDate] = []; m[f.departureDate].push(f) } }); return m }, [flights]);
+  const tripNames = useMemo(() => [...new Set(flights.map(f => f.tripName).filter(Boolean))].sort(), [flights]);
 
   const alerts = useMemo(() => { if (!notif.enabled) return []; const a = []; flights.forEach(f => { if (f.status !== "upcoming") return; if (notif.sevenDay && daysTo(f.departureDate) === 7) a.push({ t: "d7", f }); if (notif.twentyFourHr && daysTo(f.arrivalDate) === 1) a.push({ t: "r24", f }) }); return a }, [flights, notif]);
 
@@ -1209,6 +1251,7 @@ useEffect(() => {
             lookupFlight={lookupFlight} looking={looking} lookErr={lookErr}
             members={members} togTrav={togTrav} save={save}
             setView={setView} setEditing={setEditing} setForm={setForm}
+            tripNames={tripNames}
           />
         )}
       </main>
