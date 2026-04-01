@@ -197,6 +197,169 @@ const AP = {
   ASB:[37.99,58.36],
 };
 
+/* ── Airport Timezones (IANA) ─────────────────────────── */
+const TZ = {
+  // US East
+  JFK:"America/New_York",EWR:"America/New_York",LGA:"America/New_York",BOS:"America/New_York",
+  PHL:"America/New_York",DCA:"America/New_York",IAD:"America/New_York",BWI:"America/New_York",
+  CLT:"America/New_York",RDU:"America/New_York",PIT:"America/New_York",BUF:"America/New_York",
+  ROC:"America/New_York",SYR:"America/New_York",ALB:"America/New_York",RIC:"America/New_York",
+  ORF:"America/New_York",CHS:"America/New_York",SAV:"America/New_York",MIA:"America/New_York",
+  FLL:"America/New_York",PBI:"America/New_York",MCO:"America/New_York",TPA:"America/New_York",
+  JAX:"America/New_York",RSW:"America/New_York",ATL:"America/New_York",PVD:"America/New_York",
+  BDL:"America/New_York",PWM:"America/New_York",BTV:"America/New_York",MHT:"America/New_York",
+  SDF:"America/New_York",LEX:"America/New_York",CVG:"America/New_York",CMH:"America/New_York",
+  CLE:"America/New_York",DTW:"America/New_York",IND:"America/New_York",
+  // US Central
+  ORD:"America/Chicago",MDW:"America/Chicago",MSP:"America/Chicago",DFW:"America/Chicago",
+  DAL:"America/Chicago",IAH:"America/Chicago",HOU:"America/Chicago",AUS:"America/Chicago",
+  SAT:"America/Chicago",MSY:"America/Chicago",BNA:"America/Chicago",MEM:"America/Chicago",
+  STL:"America/Chicago",MCI:"America/Chicago",MKE:"America/Chicago",MSN:"America/Chicago",
+  OMA:"America/Chicago",DSM:"America/Chicago",OKC:"America/Chicago",TUL:"America/Chicago",
+  // US Mountain
+  DEN:"America/Denver",COS:"America/Denver",SLC:"America/Denver",ABQ:"America/Denver",
+  ELP:"America/Denver",BOI:"America/Boise",
+  // US Pacific
+  LAX:"America/Los_Angeles",SFO:"America/Los_Angeles",SJC:"America/Los_Angeles",OAK:"America/Los_Angeles",
+  SEA:"America/Los_Angeles",PDX:"America/Los_Angeles",SAN:"America/Los_Angeles",LAS:"America/Los_Angeles",
+  PHX:"America/Phoenix",TUS:"America/Phoenix",RNO:"America/Los_Angeles",
+  PSP:"America/Los_Angeles",SNA:"America/Los_Angeles",BUR:"America/Los_Angeles",ONT:"America/Los_Angeles",
+  LGB:"America/Los_Angeles",SMF:"America/Los_Angeles",
+  // Alaska & Hawaii
+  ANC:"America/Anchorage",FAI:"America/Anchorage",
+  HNL:"Pacific/Honolulu",OGG:"Pacific/Honolulu",LIH:"Pacific/Honolulu",KOA:"Pacific/Honolulu",
+  // Canada
+  YYZ:"America/Toronto",YUL:"America/Toronto",YOW:"America/Toronto",YHZ:"America/Halifax",
+  YQB:"America/Toronto",YKF:"America/Toronto",YXU:"America/Toronto",YQM:"America/Halifax",
+  YFC:"America/Halifax",YSJ:"America/Halifax",YQT:"America/Toronto",
+  YWG:"America/Winnipeg",YXE:"America/Regina",YQR:"America/Regina",
+  YYC:"America/Edmonton",YEG:"America/Edmonton",
+  YVR:"America/Vancouver",YYJ:"America/Vancouver",YXX:"America/Vancouver",YLW:"America/Vancouver",
+  // Mexico & Central America
+  MEX:"America/Mexico_City",GDL:"America/Mexico_City",MTY:"America/Monterrey",MID:"America/Merida",
+  CUN:"America/Cancun",CZM:"America/Cancun",SJD:"America/Mazatlan",PVR:"America/Mexico_City",
+  PTY:"America/Panama",SJO:"America/Costa_Rica",LIR:"America/Costa_Rica",
+  SAL:"America/El_Salvador",GUA:"America/Guatemala",BZE:"America/Belize",
+  // Caribbean
+  SJU:"America/Puerto_Rico",STT:"America/Virgin",STX:"America/Virgin",
+  NAS:"America/Nassau",MBJ:"America/Jamaica",KIN:"America/Jamaica",
+  PUJ:"America/Santo_Domingo",SDQ:"America/Santo_Domingo",
+  AUA:"America/Aruba",CUR:"America/Curacao",SXM:"America/Lower_Princes",
+  GCM:"America/Cayman",POS:"America/Port_of_Spain",BGI:"America/Barbados",
+  // South America
+  BOG:"America/Bogota",MDE:"America/Bogota",CLO:"America/Bogota",CTG:"America/Bogota",
+  LIM:"America/Lima",CUZ:"America/Lima",
+  GRU:"America/Sao_Paulo",GIG:"America/Sao_Paulo",BSB:"America/Sao_Paulo",
+  CNF:"America/Sao_Paulo",REC:"America/Recife",SSA:"America/Bahia",
+  SCL:"America/Santiago",EZE:"America/Argentina/Buenos_Aires",AEP:"America/Argentina/Buenos_Aires",
+  MVD:"America/Montevideo",ASU:"America/Asuncion",VVI:"America/La_Paz",
+  UIO:"America/Guayaquil",GYE:"America/Guayaquil",CCS:"America/Caracas",
+  // UK & Ireland
+  LHR:"Europe/London",LGW:"Europe/London",STN:"Europe/London",LTN:"Europe/London",
+  MAN:"Europe/London",BHX:"Europe/London",EDI:"Europe/London",GLA:"Europe/London",
+  BRS:"Europe/London",LPL:"Europe/London",NCL:"Europe/London",BFS:"Europe/London",BHD:"Europe/London",
+  DUB:"Europe/Dublin",SNN:"Europe/Dublin",ORK:"Europe/Dublin",KNO:"Europe/Dublin",
+  // France
+  CDG:"Europe/Paris",ORY:"Europe/Paris",NCE:"Europe/Paris",LYS:"Europe/Paris",
+  MRS:"Europe/Paris",TLS:"Europe/Paris",BOD:"Europe/Paris",NTE:"Europe/Paris",
+  // Benelux & Germany
+  AMS:"Europe/Amsterdam",EIN:"Europe/Amsterdam",RTM:"Europe/Amsterdam",
+  BRU:"Europe/Brussels",LUX:"Europe/Luxembourg",
+  FRA:"Europe/Berlin",MUC:"Europe/Berlin",BER:"Europe/Berlin",DUS:"Europe/Berlin",
+  HAM:"Europe/Berlin",CGN:"Europe/Berlin",STR:"Europe/Berlin",HAJ:"Europe/Berlin",
+  NUE:"Europe/Berlin",LEJ:"Europe/Berlin",DRS:"Europe/Berlin",
+  // Switzerland & Austria
+  ZRH:"Europe/Zurich",GVA:"Europe/Zurich",BSL:"Europe/Zurich",
+  VIE:"Europe/Vienna",SZG:"Europe/Vienna",INN:"Europe/Vienna",
+  // Iberia
+  BCN:"Europe/Madrid",MAD:"Europe/Madrid",PMI:"Europe/Madrid",AGP:"Europe/Madrid",
+  ALC:"Europe/Madrid",VLC:"Europe/Madrid",IBZ:"Europe/Madrid",SVQ:"Europe/Madrid",
+  BIO:"Europe/Madrid",SCQ:"Europe/Madrid",
+  LIS:"Europe/Lisbon",OPO:"Europe/Lisbon",FAO:"Europe/Lisbon",FNC:"Atlantic/Madeira",
+  // Italy
+  FCO:"Europe/Rome",MXP:"Europe/Rome",LIN:"Europe/Rome",VCE:"Europe/Rome",
+  NAP:"Europe/Rome",BLQ:"Europe/Rome",FLR:"Europe/Rome",PSA:"Europe/Rome",
+  CTA:"Europe/Rome",PMO:"Europe/Rome",OLB:"Europe/Rome",CAG:"Europe/Rome",BRI:"Europe/Rome",
+  // Greece
+  ATH:"Europe/Athens",SKG:"Europe/Athens",HER:"Europe/Athens",JMK:"Europe/Athens",
+  JTR:"Europe/Athens",CFU:"Europe/Athens",RHO:"Europe/Athens",
+  // Nordics & Baltics
+  CPH:"Europe/Copenhagen",OSL:"Europe/Oslo",BGO:"Europe/Oslo",
+  ARN:"Europe/Stockholm",GOT:"Europe/Stockholm",HEL:"Europe/Helsinki",
+  VNO:"Europe/Vilnius",RIX:"Europe/Riga",TLL:"Europe/Tallinn",
+  // Central & Eastern Europe
+  WAW:"Europe/Warsaw",KRK:"Europe/Warsaw",WRO:"Europe/Warsaw",GDN:"Europe/Warsaw",
+  PRG:"Europe/Prague",BTS:"Europe/Bratislava",BUD:"Europe/Budapest",
+  OTP:"Europe/Bucharest",CLJ:"Europe/Bucharest",SOF:"Europe/Sofia",
+  ZAG:"Europe/Zagreb",SPU:"Europe/Zagreb",DBV:"Europe/Zagreb",
+  BEG:"Europe/Belgrade",LJU:"Europe/Ljubljana",TIV:"Europe/Podgorica",KIV:"Europe/Chisinau",
+  // Turkey
+  IST:"Europe/Istanbul",SAW:"Europe/Istanbul",AYT:"Europe/Istanbul",ADB:"Europe/Istanbul",
+  ESB:"Europe/Istanbul",DLM:"Europe/Istanbul",BJV:"Europe/Istanbul",
+  // Middle East
+  DXB:"Asia/Dubai",AUH:"Asia/Dubai",SHJ:"Asia/Dubai",
+  DOH:"Asia/Qatar",BAH:"Asia/Bahrain",KWI:"Asia/Kuwait",
+  MCT:"Asia/Muscat",RUH:"Asia/Riyadh",JED:"Asia/Riyadh",MED:"Asia/Riyadh",DMM:"Asia/Riyadh",
+  TLV:"Asia/Jerusalem",AMM:"Asia/Amman",BEY:"Asia/Beirut",
+  // Africa
+  CAI:"Africa/Cairo",HRG:"Africa/Cairo",SSH:"Africa/Cairo",
+  CMN:"Africa/Casablanca",RAK:"Africa/Casablanca",TNG:"Africa/Casablanca",FEZ:"Africa/Casablanca",
+  ALG:"Africa/Algiers",TUN:"Africa/Tunis",
+  NBO:"Africa/Nairobi",MBA:"Africa/Nairobi",DAR:"Africa/Dar_es_Salaam",ZNZ:"Africa/Dar_es_Salaam",
+  KGL:"Africa/Kigali",EBB:"Africa/Kampala",ADD:"Africa/Addis_Ababa",
+  JNB:"Africa/Johannesburg",CPT:"Africa/Johannesburg",DUR:"Africa/Johannesburg",
+  WDH:"Africa/Windhoek",GBE:"Africa/Gaborone",HRE:"Africa/Harare",
+  LOS:"Africa/Lagos",ABV:"Africa/Lagos",ACC:"Africa/Accra",DSS:"Africa/Dakar",ABJ:"Africa/Abidjan",
+  MS:"Africa/Cairo",
+  // South Asia
+  DEL:"Asia/Kolkata",BOM:"Asia/Kolkata",BLR:"Asia/Kolkata",MAA:"Asia/Kolkata",
+  HYD:"Asia/Kolkata",CCU:"Asia/Kolkata",COK:"Asia/Kolkata",GOI:"Asia/Kolkata",
+  AMD:"Asia/Kolkata",PNQ:"Asia/Kolkata",GAU:"Asia/Kolkata",
+  CMB:"Asia/Colombo",MLE:"Indian/Maldives",KTM:"Asia/Kathmandu",
+  ISB:"Asia/Karachi",KHI:"Asia/Karachi",LHE:"Asia/Karachi",DAC:"Asia/Dhaka",
+  // East Asia
+  PEK:"Asia/Shanghai",PVG:"Asia/Shanghai",SHA:"Asia/Shanghai",CAN:"Asia/Shanghai",
+  SZX:"Asia/Shanghai",CTU:"Asia/Shanghai",CKG:"Asia/Shanghai",XIY:"Asia/Shanghai",
+  NKG:"Asia/Shanghai",HGH:"Asia/Shanghai",XMN:"Asia/Shanghai",WUH:"Asia/Shanghai",
+  TAO:"Asia/Shanghai",DLC:"Asia/Shanghai",TSN:"Asia/Shanghai",KMG:"Asia/Shanghai",
+  HKG:"Asia/Hong_Kong",MFM:"Asia/Macau",
+  NRT:"Asia/Tokyo",HND:"Asia/Tokyo",KIX:"Asia/Tokyo",NGO:"Asia/Tokyo",
+  FUK:"Asia/Tokyo",CTS:"Asia/Tokyo",ITM:"Asia/Tokyo",OKA:"Asia/Tokyo",
+  ICN:"Asia/Seoul",GMP:"Asia/Seoul",PUS:"Asia/Seoul",CJU:"Asia/Seoul",
+  TPE:"Asia/Taipei",KHH:"Asia/Taipei",
+  // Southeast Asia
+  SIN:"Asia/Singapore",KUL:"Asia/Kuala_Lumpur",PEN:"Asia/Kuala_Lumpur",
+  BKK:"Asia/Bangkok",DMK:"Asia/Bangkok",CNX:"Asia/Bangkok",HKT:"Asia/Bangkok",USM:"Asia/Bangkok",
+  SGN:"Asia/Ho_Chi_Minh",HAN:"Asia/Ho_Chi_Minh",DAD:"Asia/Ho_Chi_Minh",
+  CGK:"Asia/Jakarta",DPS:"Asia/Makassar",SUB:"Asia/Jakarta",
+  MNL:"Asia/Manila",CEB:"Asia/Manila",
+  RGN:"Asia/Yangon",REP:"Asia/Phnom_Penh",PNH:"Asia/Phnom_Penh",
+  VTE:"Asia/Vientiane",LPQ:"Asia/Vientiane",
+  // Oceania
+  SYD:"Australia/Sydney",MEL:"Australia/Melbourne",BNE:"Australia/Brisbane",
+  PER:"Australia/Perth",ADL:"Australia/Adelaide",CBR:"Australia/Sydney",
+  OOL:"Australia/Brisbane",CNS:"Australia/Brisbane",DRW:"Australia/Darwin",
+  AKL:"Pacific/Auckland",WLG:"Pacific/Auckland",CHC:"Pacific/Auckland",ZQN:"Pacific/Auckland",
+  NAN:"Pacific/Fiji",SUV:"Pacific/Fiji",PPT:"Pacific/Tahiti",
+  NOU:"Pacific/Noumea",APW:"Pacific/Apia",RAR:"Pacific/Rarotonga",
+  // Central Asia
+  TAS:"Asia/Tashkent",ALA:"Asia/Almaty",NQZ:"Asia/Almaty",
+  TBS:"Asia/Tbilisi",EVN:"Asia/Yerevan",GYD:"Asia/Baku",ASB:"Asia/Ashgabat",
+  // Russia
+  SU:"Europe/Moscow",S7:"Asia/Novosibirsk",
+};
+
+const tzAbbr = (airportCode, date) => {
+  const tz = TZ[(airportCode || "").toUpperCase()];
+  if (!tz) return "";
+  try {
+    const d = date ? new Date(date + "T12:00:00") : new Date();
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(d)
+      .find(p => p.type === "timeZoneName")?.value || "";
+  } catch { return ""; }
+};
+
 const getDist = (a,b) => {
   const c1=AP[a?.toUpperCase()],c2=AP[b?.toUpperCase()];
   if(!c1||!c2) return null;
@@ -379,7 +542,7 @@ function FlightCard({ f, i = 0, members, onOpenDetail }) {
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: C.textMuted }}>{fmtDate(f.departureDate)}</span>
-            {f.departureTime && <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{f.departureTime}{f.arrivalTime ? ` — ${f.arrivalTime}` : ""}</span>}
+            {f.departureTime && <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{f.departureTime}{tzAbbr(f.departureAirport, f.departureDate) ? ` ${tzAbbr(f.departureAirport, f.departureDate)}` : ""}{f.arrivalTime ? ` — ${f.arrivalTime}${tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate) ? ` ${tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate)}` : ""}` : ""}</span>}
           </div>
           {tv.length > 0 && <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>{tv.map((m) => <span key={m.id} style={{ fontSize: 9, color: m.color, background: `${m.color}10`, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{m.name}</span>)}</div>}
           {f.tripName && <div style={{ marginTop: 4 }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>{f.tripName}</span></div>}
@@ -634,7 +797,7 @@ function DetailModal({ f, members, onClose, onEdit, onDelete }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, background: C.bgInput, borderRadius: 14, padding: "16px 12px", marginBottom: 16 }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700 }}>{f.departureAirport || "--"}</div>
-              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{f.departureTime || "--"}</div>
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{f.departureTime || "--"}{tzAbbr(f.departureAirport, f.departureDate) ? <span style={{ fontSize: 9, color: C.navy, marginLeft: 4 }}>{tzAbbr(f.departureAirport, f.departureDate)}</span> : ""}</div>
               {f.departureTerminal && <div style={{ fontSize: 9, color: C.textDim }}>T{f.departureTerminal}</div>}
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
@@ -644,7 +807,7 @@ function DetailModal({ f, members, onClose, onEdit, onDelete }) {
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700 }}>{f.arrivalAirport || "--"}</div>
-              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{f.arrivalTime || "--"}</div>
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{f.arrivalTime || "--"}{tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate) ? <span style={{ fontSize: 9, color: C.navy, marginLeft: 4 }}>{tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate)}</span> : ""}</div>
               {f.arrivalTerminal && <div style={{ fontSize: 9, color: C.textDim }}>T{f.arrivalTerminal}</div>}
             </div>
           </div>
