@@ -522,13 +522,41 @@ function GlobeMap({flights}) {
 }
 
 /* ── FlightCard ─────────────────────────────────────── */
-function FlightCard({ f, i = 0, members, onOpenDetail }) {
+/* ── Live Status Styles ──────────────────────────────── */
+const LS_MAP = {
+  "on-time":{bg:C.oliveSoft,text:C.olive,label:"On Time"},
+  "delayed":{bg:"rgba(199,91,42,0.10)",text:C.accent,label:"Delayed"},
+  "cancelled":{bg:"rgba(155,48,34,0.10)",text:C.danger,label:"Cancelled"},
+  "in-flight":{bg:C.navySoft,text:C.navy,label:"In Flight"},
+  "landed":{bg:C.oliveSoft,text:C.olive,label:"Landed"},
+  "diverted":{bg:"rgba(155,48,34,0.10)",text:C.danger,label:"Diverted"},
+  "unknown":{bg:C.sandSoft,text:"#96783C",label:"Unknown"},
+};
+
+const fmtAgo = (iso) => {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+};
+
+const COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+
+function FlightCard({ f, i = 0, members, onOpenDetail, liveStatus, refreshingId, onRefresh }) {
   const d = daysTo(f.departureDate);
   const sc = ST_MAP[f.status] || ST_MAP.upcoming;
   const tv = (f.travelers || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
+  const ls = liveStatus?.[f.id];
+  const isRefreshing = refreshingId === f.id;
+  const canRefresh = f.status === "upcoming" && f.flightNumber && !isRefreshing &&
+    (!ls?.refreshedAt || (Date.now() - new Date(ls.refreshedAt).getTime()) >= COOLDOWN_MS);
+  const cooldownLeft = ls?.refreshedAt ? Math.max(0, Math.ceil((COOLDOWN_MS - (Date.now() - new Date(ls.refreshedAt).getTime())) / 60000)) : 0;
+  const lsBadge = ls ? (LS_MAP[ls.flightStatus] || LS_MAP.unknown) : null;
+
   return (
     <div className="fc card-hover" onClick={() => onOpenDetail(f)} style={{ background: C.bgCard, borderRadius: 14, cursor: "pointer", border: `1px solid ${C.border}`, overflow: "hidden", animationDelay: `${i * 0.05}s` }}>
-      <div style={{ height: 2, background: C.accent, opacity: 0.5 }} />
+      <div style={{ height: 2, background: ls?.flightStatus === "delayed" ? C.accent : ls?.flightStatus === "cancelled" ? C.danger : C.accent, opacity: 0.5 }} />
       <div style={{ padding: "13px 16px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <div style={{ flex: "1 1 auto", minWidth: 170 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -544,6 +572,16 @@ function FlightCard({ f, i = 0, members, onOpenDetail }) {
             <span style={{ fontSize: 11, color: C.textMuted }}>{fmtDate(f.departureDate)}</span>
             {f.departureTime && <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{f.departureTime}{tzAbbr(f.departureAirport, f.departureDate) ? ` ${tzAbbr(f.departureAirport, f.departureDate)}` : ""}{f.arrivalTime ? ` — ${f.arrivalTime}${tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate) ? ` ${tzAbbr(f.arrivalAirport, f.arrivalDate || f.departureDate)}` : ""}` : ""}</span>}
           </div>
+          {/* Live status row */}
+          {ls && (
+            <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
+              {lsBadge && <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: lsBadge.bg, color: lsBadge.text, fontFamily: "'Fraunces',serif", textTransform: "uppercase" }}>{lsBadge.label}</span>}
+              {ls.departureDelay > 0 && <span style={{ fontSize: 10, color: C.accent, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace" }}>+{ls.departureDelay}min</span>}
+              {ls.departureGate && <span style={{ fontSize: 10, color: C.navy, fontWeight: 600 }}>Gate {ls.departureGate}</span>}
+              {ls.arrivalGate && <span style={{ fontSize: 10, color: C.navy, fontWeight: 600 }}>→ Gate {ls.arrivalGate}</span>}
+              <span style={{ fontSize: 9, color: C.textDim }}>{fmtAgo(ls.refreshedAt)}</span>
+            </div>
+          )}
           {tv.length > 0 && <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>{tv.map((m) => <span key={m.id} style={{ fontSize: 9, color: m.color, background: `${m.color}10`, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{m.name}</span>)}</div>}
           {f.tripName && <div style={{ marginTop: 4 }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>{f.tripName}</span></div>}
         </div>
@@ -553,6 +591,21 @@ function FlightCard({ f, i = 0, members, onOpenDetail }) {
           {f.cost != null && f.cost !== "" && <div style={{ textAlign: "center" }}><div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Cost</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.accent }}>{fmtCur(f.cost)}</div></div>}
           <span style={{ background: sc.bg, color: sc.text, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 14, fontFamily: "'Fraunces',serif", textTransform: "uppercase" }}>{sc.label}</span>
           {d != null && d >= 0 && f.status === "upcoming" && <span style={{ background: d <= 3 ? "rgba(155,48,34,0.10)" : C.accentSoft, color: d <= 3 ? C.danger : C.accent, fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 14, fontFamily: "'JetBrains Mono',monospace" }}>{d === 0 ? "TODAY" : d === 1 ? "TMW" : `${d}d`}</span>}
+          {f.status === "upcoming" && f.flightNumber && (
+            <button
+              title={!canRefresh && cooldownLeft > 0 ? `Wait ${cooldownLeft}m` : "Refresh status"}
+              onClick={(e) => { e.stopPropagation(); if (canRefresh && onRefresh) onRefresh(f); }}
+              disabled={!canRefresh}
+              style={{
+                background: "none", border: `1px solid ${canRefresh ? C.border : "transparent"}`,
+                borderRadius: 8, padding: 5, cursor: canRefresh ? "pointer" : "default",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: canRefresh ? 1 : 0.35, transition: "all 0.2s",
+              }}
+            >
+              <RefreshCw size={13} color={C.textMuted} style={isRefreshing ? { animation: "spin 1s linear infinite" } : {}} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -575,7 +628,7 @@ function MemFilterBar({ members, filterM, setFilterM }) {
 
 /* ── FlightsView ────────────────────────────────────── */
 /* ── Trip Group Card ─────────────────────────────────── */
-function TripGroup({ tripName, flights, members, onOpenDetail }) {
+function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refreshingId, onRefresh }) {
   const sorted = [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
   const first = sorted[0], last = sorted[sorted.length - 1];
   const totalCost = flights.reduce((s, f) => s + (parseFloat(f.cost) || 0), 0);
@@ -604,14 +657,14 @@ function TripGroup({ tripName, flights, members, onOpenDetail }) {
       </div>
       {expanded && (
         <div style={{ padding: "8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {sorted.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}
+          {sorted.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
         </div>
       )}
     </div>
   );
 }
 
-function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd }) {
+function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
   const displayFlights = applyMF(filtered);
 
   // Group by tripName
@@ -645,8 +698,8 @@ function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, s
       </div>
       <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} />)}
-        {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}
+        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
+        {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
         {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
       </div>
     </div>
@@ -780,8 +833,14 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
 }
 
 /* ── DetailModal ────────────────────────────────────── */
-function DetailModal({ f, members, onClose, onEdit, onDelete }) {
+function DetailModal({ f, members, onClose, onEdit, onDelete, liveStatus, refreshingId, onRefresh }) {
   const tv = (f.travelers || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
+  const ls = liveStatus?.[f.id];
+  const isRefreshing = refreshingId === f.id;
+  const canRefresh = f.status === "upcoming" && f.flightNumber && !isRefreshing &&
+    (!ls?.refreshedAt || (Date.now() - new Date(ls.refreshedAt).getTime()) >= COOLDOWN_MS);
+  const cooldownLeft = ls?.refreshedAt ? Math.max(0, Math.ceil((COOLDOWN_MS - (Date.now() - new Date(ls.refreshedAt).getTime())) / 60000)) : 0;
+  const lsBadge = ls ? (LS_MAP[ls.flightStatus] || LS_MAP.unknown) : null;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(42,37,32,0.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" }} onClick={onClose}>
       <div className="fade-in" onClick={(e) => e.stopPropagation()} style={{ background: C.bgCard, borderRadius: 18, maxWidth: 480, width: "100%", border: `1px solid ${C.border}`, overflow: "hidden", maxHeight: "90vh", overflowY: "auto" }}>
@@ -821,7 +880,25 @@ function DetailModal({ f, members, onClose, onEdit, onDelete }) {
           </div>
           {tv.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>Travelers</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{tv.map((m) => <Tag key={m.id} m={m} />)}</div></div>}
           {f.notes && <div style={{ background: C.bgInput, borderRadius: 10, padding: 9, marginBottom: 14 }}><div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Notes</div><div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>{f.notes}</div></div>}
+          {ls && (
+            <div style={{ background: C.bgInput, borderRadius: 10, padding: 9, marginBottom: 14 }}>
+              <div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Live Status</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {lsBadge && <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 8, background: lsBadge.bg, color: lsBadge.text, fontFamily: "'Fraunces',serif", textTransform: "uppercase" }}>{lsBadge.label}</span>}
+                {ls.departureDelay > 0 && <span style={{ fontSize: 11, color: C.accent, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace" }}>Dep +{ls.departureDelay}min</span>}
+                {ls.arrivalDelay > 0 && <span style={{ fontSize: 11, color: C.accent, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace" }}>Arr +{ls.arrivalDelay}min</span>}
+                {ls.departureGate && <span style={{ fontSize: 11, color: C.navy, fontWeight: 600 }}>Dep Gate {ls.departureGate}</span>}
+                {ls.arrivalGate && <span style={{ fontSize: 11, color: C.navy, fontWeight: 600 }}>Arr Gate {ls.arrivalGate}</span>}
+              </div>
+              <div style={{ fontSize: 9, color: C.textDim, marginTop: 4 }}>Updated {fmtAgo(ls.refreshedAt)}</div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {f.status === "upcoming" && f.flightNumber && (
+              <button className="bs" onClick={() => { if (canRefresh && onRefresh) onRefresh(f); }} disabled={!canRefresh} style={{ opacity: canRefresh ? 1 : 0.5 }}>
+                <RefreshCw size={12} style={isRefreshing ? { animation: "spin 1s linear infinite" } : {}} /> {isRefreshing ? "Checking..." : !canRefresh && cooldownLeft > 0 ? `Wait ${cooldownLeft}m` : "Refresh Status"}
+              </button>
+            )}
             <button className="bs" onClick={() => window.open(gcalURL(f, members), "_blank")}><CalIcon /> Google Cal</button>
             <button className="bs" onClick={() => dlICS(f, members)}><Download size={12} /> .ics</button>
             <button className="bs" onClick={() => onEdit(f)}><Edit3 size={12} /> Edit</button>
@@ -834,7 +911,7 @@ function DetailModal({ f, members, onClose, onEdit, onDelete }) {
 }
 
 /* ── Dashboard ──────────────────────────────────────── */
-function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd }) {
+function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", flexWrap: "wrap", gap: 10 }}>
@@ -864,7 +941,7 @@ function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, a
       {upcoming.length > 0 && (
         <div>
           <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 7 }}><PlaneIcon size={15} color={C.accent} /> Upcoming</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>{applyMF(upcoming).slice(0, 5).map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} />)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>{applyMF(upcoming).slice(0, 5).map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}</div>
         </div>
       )}
       {flights.length > 0 && (
@@ -1120,6 +1197,8 @@ export default function FlightDeck() {
   const [notif,setNotif] = useState({enabled:false,email:"",sevenDay:true,twentyFourHr:true});
   const [looking,setLooking] = useState(false);
   const [lookErr,setLookErr] = useState("");
+  const [liveStatus,setLiveStatus] = useState({});
+  const [refreshingId,setRefreshingId] = useState(null);
 
   // ── Auth: check session on mount + listen for changes ──
   useEffect(() => {
@@ -1241,6 +1320,27 @@ useEffect(() => {
       setLooking(false);
     }
   }, [form.flightNumber, form.departureDate]);
+
+  // ── Flight Status Refresh (AviationStack only — no Anthropic cost) ──
+  const refreshFlight = useCallback(async (f) => {
+    if (!f.flightNumber) return;
+    setRefreshingId(f.id);
+    try {
+      const resp = await fetch("/api/refresh-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flightNumber: f.flightNumber, departureDate: f.departureDate }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.status) {
+        setLiveStatus(prev => ({ ...prev, [f.id]: data.status }));
+      }
+    } catch (err) {
+      console.error("Refresh failed:", err);
+    } finally {
+      setRefreshingId(null);
+    }
+  }, []);
 
   // ── CRUD (Supabase) ──
   const save = useCallback(async () => {
@@ -1379,6 +1479,7 @@ useEffect(() => {
             alerts={alerts} next={next} nextD={nextD}
             totalMiles={totalMiles} totalSpend={totalSpend}
             onOpenDetail={setDetail} onAdd={handleAdd}
+            liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
           />
         )}
         {view === "flights" && (
@@ -1386,6 +1487,7 @@ useEffect(() => {
             search={search} setSearch={setSearch} filtered={filtered}
             applyMF={applyMF} members={members} filterM={filterM}
             setFilterM={setFilterM} onOpenDetail={setDetail} onAdd={handleAdd}
+            liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
           />
         )}
         {view === "calendar" && (
@@ -1418,7 +1520,7 @@ useEffect(() => {
           />
         )}
       </main>
-      {detail && <DetailModal f={detail} members={members} onClose={() => setDetail(null)} onEdit={edit} onDelete={del} />}
+      {detail && <DetailModal f={detail} members={members} onClose={() => setDetail(null)} onEdit={edit} onDelete={del} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight} />}
     </div>
   );
 }
