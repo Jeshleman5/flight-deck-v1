@@ -1232,39 +1232,57 @@ export default function FlightDeck() {
   const userName = session?.user?.user_metadata?.full_name || session?.user?.email || '';
 
   // ── Load flights from Supabase when user signs in ──
-// ── Load local prefs (members, notif) on mount ──
+// ── Load local prefs (notif only — members now in Supabase) ──
 useEffect(() => {
   try {
     const raw = localStorage.getItem('fd-local');
     if (raw) {
       const d = JSON.parse(raw);
-      if (d.members) setMembers(d.members);
       if (d.notif) setNotif(d.notif);
     }
   } catch {}
 }, []);
 
-// ── Load flights from Supabase when user signs in ──
+// ── Load flights + travelers from Supabase when user signs in ──
 useEffect(() => {
   if (!userId) { setLoaded(true); return; }
   (async () => {
-    const { data, error } = await supabase
+    // Load flights
+    const { data: flightData, error: flightErr } = await supabase
       .from('flights')
       .select('*')
       .eq('user_id', userId)
       .order('departure_date', { ascending: true });
-    if (!error && data) {
-      setFlights(data.map(fromDb));
+    if (!flightErr && flightData) {
+      setFlights(flightData.map(fromDb));
+    }
+    // Load travelers
+    const { data: travData, error: travErr } = await supabase
+      .from('travelers')
+      .select('*')
+      .eq('user_id', userId);
+    if (!travErr && travData && travData.length > 0) {
+      // Always ensure "Me" is present
+      const hasME = travData.some(t => t.id === 'me');
+      const loaded = travData.map(t => ({ id: t.id, name: t.name, relationship: t.relationship, color: t.color }));
+      if (!hasME) loaded.unshift(DEF_MEM[0]);
+      setMembers(loaded);
+    } else {
+      // First time — seed "Me" into Supabase
+      setMembers(DEF_MEM);
+      await supabase.from('travelers').upsert({
+        id: 'me', user_id: userId, name: 'Me', relationship: 'self', color: C.accent,
+      });
     }
     setLoaded(true);
   })();
 }, [userId]);
 
-  // ── Save members/notif to localStorage (local prefs) ──
+  // ── Save notif prefs to localStorage (members now in Supabase) ──
   useEffect(() => {
     if (!loaded) return;
-    try { localStorage.setItem('fd-local', JSON.stringify({ members, notif })); } catch {}
-  }, [members, notif, loaded]);
+    try { localStorage.setItem('fd-local', JSON.stringify({ notif })); } catch {}
+  }, [notif, loaded]);
 
   // ── Form updater ──
   const uf = useCallback((k,v) => setForm(p=>({...p,[k]:v})),[]);
@@ -1399,18 +1417,21 @@ useEffect(() => {
     setDetail(null);
   }, []);
 
-  const addMem = useCallback(() => {
-    if (!newMem.name.trim()) return;
-    setMembers(p => [...p, { id: genId(), name: newMem.name.trim(), relationship: newMem.relationship, color: REL_COL[newMem.relationship] || C.textMuted }]);
+  const addMem = useCallback(async () => {
+    if (!newMem.name.trim() || !userId) return;
+    const m = { id: genId(), name: newMem.name.trim(), relationship: newMem.relationship, color: REL_COL[newMem.relationship] || C.textMuted };
+    setMembers(p => [...p, m]);
     setNewMem({ name: "", relationship: "spouse" });
     setShowMF(false);
-  }, [newMem]);
+    await supabase.from('travelers').insert({ id: m.id, user_id: userId, name: m.name, relationship: m.relationship, color: m.color });
+  }, [newMem, userId]);
 
-  const rmMem = useCallback((id) => {
-    if (id === "me") return;
+  const rmMem = useCallback(async (id) => {
+    if (id === "me" || !userId) return;
     setMembers(p => p.filter(m => m.id !== id));
     setFlights(p => p.map(f => ({ ...f, travelers: (f.travelers || []).filter(t => t !== id) })));
-  }, []);
+    await supabase.from('travelers').delete().eq('id', id).eq('user_id', userId);
+  }, [userId]);
 
   const togTrav = useCallback((id) => setForm(p => ({ ...p, travelers: (p.travelers || []).includes(id) ? (p.travelers || []).filter(t => t !== id) : [...(p.travelers || []), id] })), []);
 
