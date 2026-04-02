@@ -612,20 +612,6 @@ function FlightCard({ f, i = 0, members, onOpenDetail, liveStatus, refreshingId,
   );
 }
 
-/* ── MemFilterBar ───────────────────────────────────── */
-function MemFilterBar({ members, filterM, setFilterM }) {
-  if (members.length <= 1) return null;
-  return (
-    <div>
-      <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontFamily: "'Fraunces',serif" }}>Filter by traveler</div>
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-        <span className={`tg ${!filterM ? "ts" : ""}`} onClick={() => setFilterM(null)} style={{ background: !filterM ? `${C.accent}15` : C.bgInput, color: !filterM ? C.accent : C.textMuted }}>All</span>
-        {members.map((m) => <Tag key={m.id} m={m} sel={filterM === m.id} onClick={() => setFilterM(filterM === m.id ? null : m.id)} />)}
-      </div>
-    </div>
-  );
-}
-
 /* ── FlightsView ────────────────────────────────────── */
 /* ── Trip Group Card ─────────────────────────────────── */
 function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refreshingId, onRefresh }) {
@@ -692,8 +678,8 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
   );
 }
 
-function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, setFilterM, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
-  const displayFlights = applyMF(filtered);
+function FlightsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
+  const displayFlights = filtered;
 
   // Group by tripName
   const { trips, ungrouped } = useMemo(() => {
@@ -724,7 +710,6 @@ function FlightsView({ search, setSearch, filtered, applyMF, members, filterM, s
         <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textDim }} />
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search flights..." style={{ paddingLeft: 32 }} />
       </div>
-      <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
         {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
@@ -1097,7 +1082,7 @@ function DetailModal({ f, members, onClose, onEdit, onDelete, liveStatus, refres
 }
 
 /* ── Dashboard ──────────────────────────────────────── */
-function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
+function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", flexWrap: "wrap", gap: 10 }}>
@@ -1123,11 +1108,10 @@ function Dashboard({ upcoming, flights, members, filterM, setFilterM, applyMF, a
         <Stat icon={<DollarIcon />} label="Spend" value={fmtCur(totalSpend)} sub={`${[...new Set(flights.map(f => f.tripName).filter(Boolean))].length || 0} trips`} color={C.sand} />
         <Stat icon={<Clock size={15} color={C.navy} />} label="Next Trip" value={nextD != null ? (nextD === 0 ? "Today" : `${nextD}d`) : "--"} sub={next ? `${next.departureAirport} > ${next.arrivalAirport}` : ""} color={nextD != null && nextD <= 3 ? C.danger : C.navy} />
       </div>
-      <MemFilterBar members={members} filterM={filterM} setFilterM={setFilterM} />
       {upcoming.length > 0 && (
         <div>
           <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 7 }}><PlaneIcon size={15} color={C.accent} /> Upcoming</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>{applyMF(upcoming).slice(0, 5).map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>{upcoming.slice(0, 5).map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}</div>
         </div>
       )}
       {flights.length > 0 && (
@@ -1382,7 +1366,6 @@ export default function FlightDeck() {
   const [loaded,setLoaded] = useState(false);
   const [search,setSearch] = useState("");
   const [detail,setDetail] = useState(null);
-  const [filterM,setFilterM] = useState(null);
   const [showMF,setShowMF] = useState(false);
   const [newMem,setNewMem] = useState({name:"",relationship:"spouse"});
   const [notif,setNotif] = useState({enabled:false,email:"",sevenDay:true,twentyFourHr:true});
@@ -1779,7 +1762,7 @@ useEffect(() => {
 
   // ── Computed ──
   const sorted = useMemo(() => [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || "")), [flights]);
-  const filtered = useMemo(() => { let r = sorted; if (filterM) r = r.filter(f => (f.travelers || []).includes(filterM)); if (search) r = r.filter(f => [f.airline, f.flightNumber, f.departureAirport, f.arrivalAirport, f.confirmationCode, f.notes, f.tripName].filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))); return r }, [sorted, filterM, search]);
+  const filtered = useMemo(() => { if (!search) return sorted; return sorted.filter(f => [f.airline, f.flightNumber, f.departureAirport, f.arrivalAirport, f.confirmationCode, f.notes, f.tripName].filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))); }, [sorted, search]);
   const upcoming = useMemo(() => sorted.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0), [sorted]);
   const totalSpend = useMemo(() => flights.reduce((s, f) => s + (f.cost || 0), 0), [flights]);
   const totalMiles = useMemo(() => flights.filter(f => f.status !== "cancelled").reduce((s, f) => s + (f.miles || 0), 0), [flights]);
@@ -1819,8 +1802,6 @@ useEffect(() => {
 
   const alerts = useMemo(() => { if (!notif.enabled) return []; const a = []; flights.forEach(f => { if (f.status !== "upcoming") return; if (notif.sevenDay && daysTo(f.departureDate) === 7) a.push({ t: "d7", f }); if (notif.twentyFourHr && daysTo(f.arrivalDate) === 1) a.push({ t: "r24", f }) }); return a }, [flights, notif]);
 
-  const applyMF = useCallback((list) => filterM ? list.filter(f => (f.travelers || []).includes(filterM)) : list, [filterM]);
-
   // ── Auth loading ──
   if (authLoading) return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: C.bg }}><Loader2 size={24} color={C.accent} style={{ animation: "spin 1s linear infinite" }} /><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>;
 
@@ -1857,7 +1838,6 @@ useEffect(() => {
         {view === "dashboard" && (
           <Dashboard
             upcoming={upcoming} flights={flights} members={allPeople}
-            filterM={filterM} setFilterM={setFilterM} applyMF={applyMF}
             alerts={alerts} next={next} nextD={nextD}
             totalMiles={totalMiles} totalSpend={totalSpend}
             onOpenDetail={setDetail} onAdd={handleAdd}
@@ -1867,8 +1847,8 @@ useEffect(() => {
         {view === "flights" && (
           <FlightsView
             search={search} setSearch={setSearch} filtered={filtered}
-            applyMF={applyMF} members={allPeople} filterM={filterM}
-            setFilterM={setFilterM} onOpenDetail={setDetail} onAdd={handleAdd}
+            members={allPeople}
+            onOpenDetail={setDetail} onAdd={handleAdd}
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
           />
         )}
