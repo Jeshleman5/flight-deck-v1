@@ -391,7 +391,7 @@ const dlICS = (f,mem) => {
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));a.download=`${f.flightNumber||"flight"}.ics`;a.click();
 };
 
-const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:["me"],tripName:""};
+const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:[],tripName:""};
 const DEF_MEM = [{id:"me",name:"Me",relationship:"self",color:C.accent}];
 const RELS = ["self","spouse","parent","in-law","sibling","child","other"];
 const REL_COL = {self:C.accent,spouse:C.olive,parent:C.navy,"in-law":C.sand,sibling:"#7B6B8D",child:"#6B8D7B",other:C.textMuted};
@@ -908,39 +908,6 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
         </div>
       )}
 
-      {/* ── Traveler Labels ─── */}
-      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, fontFamily: "'Fraunces',serif" }}>Traveler Labels</div>
-          <button className="bs" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setShowMF(!showMF)}><Plus size={11} /> Add</button>
-        </div>
-        {showMF && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "end" }}>
-            <div style={{ flex: "1 1 140px" }}>
-              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 2 }}>Name</label>
-              <input value={newMem.name} onChange={(e) => setNewMem((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Sarah" />
-            </div>
-            <div style={{ flex: "0 0 120px" }}>
-              <label style={{ fontSize: 9, color: C.textDim, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 2 }}>Rel</label>
-              <select value={newMem.relationship} onChange={(e) => setNewMem((p) => ({ ...p, relationship: e.target.value }))}>{RELS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-            </div>
-            <button className="bp" style={{ padding: "8px 14px", fontSize: 11 }} onClick={addMem}><Check size={13} /></button>
-          </div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {members.map((m) => (
-            <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: C.bgInput, borderRadius: 9 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: m.color }} />
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{m.name}</span>
-                <span style={{ fontSize: 10, color: C.textMuted, textTransform: "capitalize" }}>{m.relationship}</span>
-              </div>
-              {m.id !== "me" && <button style={{ background: "none", border: "none", cursor: "pointer", padding: 3 }} onClick={() => rmMem(m.id)}><X size={13} color={C.textDim} /></button>}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* ── Notifications ─── */}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
         <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Notifications</div>
@@ -967,7 +934,7 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
 }
 
 /* ── AddFlightForm ──────────────────────────────────── */
-function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, members, togTrav, save, setView, setEditing, setForm, tripNames }) {
+function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, togTrav, save, setView, setEditing, setForm, tripNames, connectedMembers, userId }) {
   const isE = !!editing;
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 580, margin: "0 auto", width: "100%" }}>
@@ -1017,8 +984,25 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, memb
           </div>
           <TripNameField value={form.tripName} onChange={(v) => uf("tripName", v)} tripNames={tripNames} />
           <div style={{ flex: "1 1 100%" }}>
-            <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Travelers</label>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{members.map((m) => <Tag key={m.id} m={m} sel={(form.travelers || []).includes(m.id)} onClick={() => togTrav(m.id)} />)}</div>
+            <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Who's Flying</label>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              <span onClick={() => togTrav(userId)} className={`tg ${(form.travelers || []).includes(userId) ? "ts" : ""}`} style={{ background: (form.travelers || []).includes(userId) ? `${C.accent}15` : `${C.textMuted}12`, color: (form.travelers || []).includes(userId) ? C.accent : C.textMuted }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.accent, display: "inline-block" }} />Me
+              </span>
+              {(connectedMembers || []).map(m => {
+                const sel = (form.travelers || []).includes(m.user_id);
+                return (
+                  <span key={m.user_id} onClick={() => togTrav(m.user_id)} className={`tg ${sel ? "ts" : ""}`} style={{ background: sel ? C.navySoft : `${C.textMuted}12`, color: sel ? C.navy : C.textMuted }}>
+                    {m.avatar_url ? (
+                      <img src={m.avatar_url} alt="" style={{ width: 14, height: 14, borderRadius: "50%" }} />
+                    ) : (
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.navy, display: "inline-block" }} />
+                    )}
+                    {(m.name || "").split(" ")[0]}
+                  </span>
+                );
+              })}
+            </div>
           </div>
           <div style={{ flex: "1 1 100%" }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2, display: "block", fontFamily: "'Fraunces',serif" }}>Notes</label>
@@ -1791,7 +1775,7 @@ useEffect(() => {
 
   const handleNav = useCallback((id) => setView(id), []);
 
-  const handleAdd = useCallback(() => { setForm({ ...EMPTY }); setEditing(null); setView("add"); }, []);
+  const handleAdd = useCallback(() => { setForm({ ...EMPTY, travelers: userId ? [userId] : [] }); setEditing(null); setView("add"); }, [userId]);
 
   // ── Computed ──
   const sorted = useMemo(() => [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || "")), [flights]);
@@ -1808,6 +1792,25 @@ useEffect(() => {
   const yAL = useMemo(() => [...new Set(yf.map(f => airlineName(f.flightNumber)).filter(v => v && v.length > 2))], [yf]);
   const topAP = useMemo(() => { const c = {}; yf.forEach(f => { [f.departureAirport, f.arrivalAirport].filter(Boolean).forEach(a => { c[a] = (c[a] || 0) + 1 }) }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || "--" }, [yf]);
   const calFBD = useMemo(() => { const m = {}; flights.forEach(f => { if (f.departureDate) { if (!m[f.departureDate]) m[f.departureDate] = []; m[f.departureDate].push(f) } }); return m }, [flights]);
+
+  // Unified people lookup: current user + old traveler labels + connected family
+  const allPeople = useMemo(() => {
+    const people = [];
+    // Current user
+    if (userId) people.push({ id: userId, name: "Me", color: C.accent });
+    // Old traveler labels (for backward compat with existing flights)
+    members.forEach(m => { if (m.id !== "me" || !userId) people.push({ id: m.id, name: m.name, color: m.color }); });
+    // Also map "me" -> userId for old flights
+    if (userId) people.push({ id: "me", name: "Me", color: C.accent });
+    // Connected family
+    connectedMembers.forEach(m => {
+      if (!people.find(p => p.id === m.user_id)) {
+        people.push({ id: m.user_id, name: (m.name || "").split(" ")[0], color: C.navy });
+      }
+    });
+    return people;
+  }, [userId, members, connectedMembers]);
+
   const tripNames = useMemo(() => {
     const allFlights = [...flights, ...familyFlights];
     const upcoming = allFlights.filter(f => f.tripName && (daysTo(f.departureDate) === null || daysTo(f.departureDate) >= -7));
@@ -1853,7 +1856,7 @@ useEffect(() => {
       <main style={{ maxWidth: 820, margin: "0 auto", padding: "12px 12px 80px" }}>
         {view === "dashboard" && (
           <Dashboard
-            upcoming={upcoming} flights={flights} members={members}
+            upcoming={upcoming} flights={flights} members={allPeople}
             filterM={filterM} setFilterM={setFilterM} applyMF={applyMF}
             alerts={alerts} next={next} nextD={nextD}
             totalMiles={totalMiles} totalSpend={totalSpend}
@@ -1864,7 +1867,7 @@ useEffect(() => {
         {view === "flights" && (
           <FlightsView
             search={search} setSearch={setSearch} filtered={filtered}
-            applyMF={applyMF} members={members} filterM={filterM}
+            applyMF={applyMF} members={allPeople} filterM={filterM}
             setFilterM={setFilterM} onOpenDetail={setDetail} onAdd={handleAdd}
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
           />
@@ -1897,13 +1900,14 @@ useEffect(() => {
           <AddFlightForm
             editing={editing} form={form} uf={uf}
             lookupFlight={lookupFlight} looking={looking} lookErr={lookErr}
-            members={members} togTrav={togTrav} save={save}
+            togTrav={togTrav} save={save}
             setView={setView} setEditing={setEditing} setForm={setForm}
             tripNames={tripNames}
+            connectedMembers={connectedMembers} userId={userId}
           />
         )}
       </main>
-      {detail && <DetailModal f={detail} members={members} onClose={() => setDetail(null)} onEdit={edit} onDelete={del} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight} />}
+      {detail && <DetailModal f={detail} members={allPeople} onClose={() => setDetail(null)} onEdit={edit} onDelete={del} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight} />}
     </div>
   );
 }
