@@ -3,7 +3,7 @@ import {
   Plus, Upload, Clock, Trash2, Edit3, Download, ChevronLeft, ChevronRight,
   X, Check, Loader2, Globe, Hash, AlertCircle, CheckCircle2,
   Search, Users, Bell, Star, MapPin, Mail,
-  BarChart3, Compass, RefreshCw, LogOut
+  BarChart3, Compass, RefreshCw, LogOut, User
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -612,7 +612,7 @@ function FlightCard({ f, i = 0, members, onOpenDetail, liveStatus, refreshingId,
   );
 }
 
-/* ── FlightsView ────────────────────────────────────── */
+/* ── TripsView (list + calendar toggle) ──────────────── */
 /* ── Trip Group Card ─────────────────────────────────── */
 function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refreshingId, onRefresh }) {
   const sorted = [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
@@ -678,7 +678,8 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
   );
 }
 
-function FlightsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
+function TripsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh, calM, calY, setCalM, setCalY, calFBD }) {
+  const [mode, setMode] = useState("list"); // "list" or "calendar"
   const displayFlights = filtered;
 
   // Group by tripName
@@ -693,28 +694,74 @@ function FlightsView({ search, setSearch, filtered, members, onOpenDetail, onAdd
         ungrouped.push(f);
       }
     });
-    // Sort trips by earliest departure date
     const trips = Object.entries(tripMap)
       .map(([name, flights]) => ({ name, flights }))
       .sort((a, b) => (a.flights[0]?.departureDate || "").localeCompare(b.flights[0]?.departureDate || ""));
     return { trips, ungrouped };
   }, [displayFlights]);
 
+  // Calendar helpers
+  const calDays = () => {
+    const first = new Date(calY, calM, 1).getDay(), total = new Date(calY, calM + 1, 0).getDate(), d = [];
+    for (let i = 0; i < first; i++) d.push(null);
+    for (let i = 1; i <= total; i++) d.push(i);
+    return d;
+  };
+  const prevMonth = () => { if (calM === 0) { setCalM(11); setCalY((y) => y - 1); } else setCalM((m) => m - 1); };
+  const nextMonth = () => { if (calM === 11) { setCalM(0); setCalY((y) => y + 1); } else setCalM((m) => m + 1); };
+
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>All Flights</h1>
-        <button className="bp" onClick={onAdd}><Plus size={14} /> Add</button>
+        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>Trips</h1>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+            <button onClick={() => setMode("list")} style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: mode === "list" ? C.accent : "transparent", color: mode === "list" ? C.cream : C.textMuted, fontFamily: "'Fraunces',serif", transition: "all 0.2s" }}>List</button>
+            <button onClick={() => setMode("calendar")} style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: mode === "calendar" ? C.accent : "transparent", color: mode === "calendar" ? C.cream : C.textMuted, fontFamily: "'Fraunces',serif", transition: "all 0.2s" }}>Calendar</button>
+          </div>
+        </div>
       </div>
-      <div style={{ position: "relative" }}>
-        <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textDim }} />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search flights..." style={{ paddingLeft: 32 }} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
-        {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
-        {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No flights yet"}</div>}
-      </div>
+
+      {mode === "list" && (
+        <>
+          <div style={{ position: "relative" }}>
+            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textDim }} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search trips..." style={{ paddingLeft: 32 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
+            {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
+            {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No trips yet"}</div>}
+          </div>
+        </>
+      )}
+
+      {mode === "calendar" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
+            <button className="bi" onClick={prevMonth}><ChevronLeft size={15} /></button>
+            <span style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, minWidth: 160, textAlign: "center" }}>{MO[calM]} {calY}</span>
+            <button className="bi" onClick={nextMonth}><ChevronRight size={15} /></button>
+          </div>
+          <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 12, overflow: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, minWidth: 280 }}>
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => <div key={d} style={{ textAlign: "center", fontSize: 9, color: C.textDim, fontWeight: 700, padding: "5px 2px", fontFamily: "'Fraunces',serif", textTransform: "uppercase", letterSpacing: 1 }}>{d}</div>)}
+              {calDays().map((day, i) => {
+                if (!day) return <div key={`e${i}`} />;
+                const ds = `${calY}-${String(calM + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const df = calFBD[ds] || [];
+                const isT = new Date().toISOString().split("T")[0] === ds;
+                return (
+                  <div key={i} className={`cd ${df.length ? "cf" : ""}`} style={{ padding: "5px 2px", textAlign: "center", minHeight: 48, border: isT ? `1px solid ${C.accent}` : "1px solid transparent" }}>
+                    <div style={{ fontSize: 12, fontWeight: isT ? 700 : 400, color: isT ? C.accent : df.length ? C.text : C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{day}</div>
+                    {df.map((f, fi) => <div key={fi} onClick={() => onOpenDetail(f)} style={{ fontSize: 7.5, background: `${C.accent}18`, color: C.accent, borderRadius: 3, padding: "1px 2px", marginTop: 1, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{f.departureAirport}{">"}{f.arrivalAirport}</div>)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -825,7 +872,7 @@ function TripSummaryCard({ trip }) {
 }
 
 /* ── FamilyView ─────────────────────────────────────── */
-function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmMem, notif, setNotif, upcoming, members2, inviteEmail, setInviteEmail, inviteLoading, sendInvite, inviteLink, invites, connectedMembers, familyFlights }) {
+function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmMem, inviteEmail, setInviteEmail, inviteLoading, sendInvite, inviteLink, invites, connectedMembers, familyFlights }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}><Users size={17} color={C.accent} /> Family & Settings</h1>
@@ -892,28 +939,6 @@ function FamilyView({ showMF, setShowMF, newMem, setNewMem, addMem, members, rmM
           ))}
         </div>
       )}
-
-      {/* ── Notifications ─── */}
-      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Notifications</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.enabled} onChange={(e) => setNotif((p) => ({ ...p, enabled: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Enable notifications</label>
-          {notif.enabled && (
-            <>
-              <input value={notif.email} onChange={(e) => setNotif((p) => ({ ...p, email: e.target.value }))} placeholder="your@email.com" type="email" style={{ maxWidth: 280 }} />
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.sevenDay} onChange={(e) => setNotif((p) => ({ ...p, sevenDay: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 7-day departure</label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.twentyFourHr} onChange={(e) => setNotif((p) => ({ ...p, twentyFourHr: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 24-hour return</label>
-              <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.5, marginTop: 2 }}>Alerts appear in-app. Connect Supabase + Resend for email delivery.</p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Export ─── */}
-      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif" }}>Export</div>
-        <button className="bs" onClick={() => upcoming.forEach((f) => window.open(gcalURL(f, members2), "_blank"))}><CalIcon /> Sync All to Google Cal</button>
-      </div>
     </div>
   );
 }
@@ -925,7 +950,7 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, togT
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 580, margin: "0 auto", width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>{isE ? "Edit Flight" : "Add Flight"}</h1>
-        <button className="bs" onClick={() => { setView("flights"); setEditing(null); setForm({ ...EMPTY }); }}><X size={13} /> Cancel</button>
+        <button className="bs" onClick={() => { setView("trips"); setEditing(null); setForm({ ...EMPTY }); }}><X size={13} /> Cancel</button>
       </div>
       {!isE && (
         <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
@@ -995,7 +1020,7 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, togT
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "flex-end" }}>
-          <button className="bs" onClick={() => { setView("flights"); setEditing(null); setForm({ ...EMPTY }); }}>Cancel</button>
+          <button className="bs" onClick={() => { setView("trips"); setEditing(null); setForm({ ...EMPTY }); }}>Cancel</button>
           <button className="bp" onClick={save} disabled={!form.departureDate && !form.flightNumber}><Check size={13} /> {isE ? "Update" : "Save"}</button>
         </div>
       </div>
@@ -1132,89 +1157,75 @@ function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles
   );
 }
 
-/* ── CalendarView ───────────────────────────────────── */
-function CalendarView({ calM, calY, setCalM, setCalY, calFBD, onOpenDetail }) {
-  const calDays = () => {
-    const first = new Date(calY, calM, 1).getDay(), total = new Date(calY, calM + 1, 0).getDate(), d = [];
-    for (let i = 0; i < first; i++) d.push(null);
-    for (let i = 1; i <= total; i++) d.push(i);
-    return d;
-  };
-  const prevMonth = () => { if (calM === 0) { setCalM(11); setCalY((y) => y - 1); } else setCalM((m) => m - 1); };
-  const nextMonth = () => { if (calM === 11) { setCalM(0); setCalY((y) => y + 1); } else setCalM((m) => m + 1); };
-
-  return (
-    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}><CalIcon size={18} color={C.accent} /> Calendar</h1>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
-        <button className="bi" onClick={prevMonth}><ChevronLeft size={15} /></button>
-        <span style={{ fontFamily: "'Fraunces',serif", fontSize: 17, fontWeight: 700, minWidth: 160, textAlign: "center" }}>{MO[calM]} {calY}</span>
-        <button className="bi" onClick={nextMonth}><ChevronRight size={15} /></button>
-      </div>
-      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 12, overflow: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, minWidth: 280 }}>
-          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => <div key={d} style={{ textAlign: "center", fontSize: 9, color: C.textDim, fontWeight: 700, padding: "5px 2px", fontFamily: "'Fraunces',serif", textTransform: "uppercase", letterSpacing: 1 }}>{d}</div>)}
-          {calDays().map((day, i) => {
-            if (!day) return <div key={`e${i}`} />;
-            const ds = `${calY}-${String(calM + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            const df = calFBD[ds] || [];
-            const isT = new Date().toISOString().split("T")[0] === ds;
-            return (
-              <div key={i} className={`cd ${df.length ? "cf" : ""}`} style={{ padding: "5px 2px", textAlign: "center", minHeight: 48, border: isT ? `1px solid ${C.accent}` : "1px solid transparent" }}>
-                <div style={{ fontSize: 12, fontWeight: isT ? 700 : 400, color: isT ? C.accent : df.length ? C.text : C.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{day}</div>
-                {df.map((f, fi) => <div key={fi} onClick={() => onOpenDetail(f)} style={{ fontSize: 7.5, background: `${C.accent}18`, color: C.accent, borderRadius: 3, padding: "1px 2px", marginTop: 1, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{f.departureAirport}{">"}{f.arrivalAirport}</div>)}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── ReviewView ─────────────────────────────────────── */
-function ReviewView({ yf, yMi, ySp, yAP, yAL, topAP, curYear }) {
+/* ── MeView ──────────────────────────────────────────── */
+function MeView({ yf, yMi, ySp, yAP, yAL, topAP, curYear, notif, setNotif, upcoming, members, userName, avatarUrl, signOut }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}><SunBurst size={20} color={C.accent} /> {curYear} in Review</h1>
-      {yf.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 36, background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}` }}><p style={{ color: C.textMuted }}>No flights for {curYear}.</p></div>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Stat icon={<PlaneIcon size={15} color={C.accent} />} label="Flights" value={yf.length} color={C.accent} />
-            <Stat icon={<CompassRose size={15} color={C.olive} />} label="Miles" value={comma(yMi)} sub={yMi > 0 ? `${Math.round(yMi / 24901 * 100)}% around Earth` : ""} color={C.olive} />
-            <Stat icon={<MapPin size={15} color={C.navy} />} label="Airports" value={yAP.length} sub={`Hub: ${topAP}`} color={C.navy} />
-            <Stat icon={<DollarIcon />} label="Spent" value={fmtCur(ySp)} color={C.sand} />
-          </div>
-          <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}><GlobeMap flights={yf} /></div>
-          {yAL.length > 0 && (
-            <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-              <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'Fraunces',serif" }}>Airlines</div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{yAL.map((a) => <span key={a} style={{ background: C.bgInput, padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${C.border}` }}>{a}</span>)}</div>
+      {/* Profile header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" style={{ width: 44, height: 44, borderRadius: "50%", border: `2px solid ${C.border}` }} />
+        ) : (
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: C.accent }}>{(userName || "?")[0]}</div>
+        )}
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>{userName}</h1>
+          <div style={{ fontSize: 11, color: C.textMuted }}>{yf.length} flights in {curYear} · {comma(yMi)} miles</div>
+        </div>
+        <button className="bs" onClick={signOut} style={{ fontSize: 11 }}><LogOut size={12} /> Sign out</button>
+      </div>
+
+      {/* Year in Review */}
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><SunBurst size={12} color={C.accent} /> {curYear} in Review</div>
+        {yf.length === 0 ? (
+          <p style={{ color: C.textMuted, fontSize: 12 }}>No flights for {curYear} yet.</p>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <Stat icon={<PlaneIcon size={15} color={C.accent} />} label="Flights" value={yf.length} color={C.accent} />
+              <Stat icon={<CompassRose size={15} color={C.olive} />} label="Miles" value={comma(yMi)} sub={yMi > 0 ? `${Math.round(yMi / 24901 * 100)}% around Earth` : ""} color={C.olive} />
+              <Stat icon={<MapPin size={15} color={C.navy} />} label="Airports" value={yAP.length} sub={`Hub: ${topAP}`} color={C.navy} />
+              <Stat icon={<DollarIcon />} label="Spent" value={fmtCur(ySp)} color={C.sand} />
             </div>
-          )}
-          <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-            <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'Fraunces',serif" }}>Airports</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{yAP.map((a) => <span key={a} style={{ background: C.accentSoft, color: C.accent, padding: "3px 9px", borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{a}</span>)}</div>
-          </div>
-          <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-            <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'Fraunces',serif" }}>By Month</div>
-            <div style={{ display: "flex", gap: 3, alignItems: "end", height: 70 }}>
+            <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 10 }}><GlobeMap flights={yf} /></div>
+            {yAL.length > 0 && <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{yAL.map((a) => <span key={a} style={{ background: C.bgInput, padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${C.border}` }}>{a}</span>)}</div>}
+            <div style={{ display: "flex", gap: 3, alignItems: "end", height: 60 }}>
               {MO.map((mn, mi) => {
                 const cnt = yf.filter((f) => f.departureDate && parseInt(f.departureDate.split("-")[1]) === mi + 1).length;
                 const mx = Math.max(1, ...MO.map((_, j) => yf.filter((f) => f.departureDate && parseInt(f.departureDate.split("-")[1]) === j + 1).length));
                 return (
                   <div key={mi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                    <div style={{ width: "100%", background: cnt ? C.accent : C.bgInput, height: `${Math.max(3, cnt / mx * 55)}px`, borderRadius: 2 }} />
+                    <div style={{ width: "100%", background: cnt ? C.accent : C.bgInput, height: `${Math.max(3, cnt / mx * 45)}px`, borderRadius: 2 }} />
                     <span style={{ fontSize: 7, color: C.textDim, fontFamily: "'JetBrains Mono',monospace" }}>{mn.slice(0, 1)}</span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
+
+      {/* Notifications */}
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Notifications</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.enabled} onChange={(e) => setNotif((p) => ({ ...p, enabled: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Enable notifications</label>
+          {notif.enabled && (
+            <>
+              <input value={notif.email} onChange={(e) => setNotif((p) => ({ ...p, email: e.target.value }))} placeholder="your@email.com" type="email" style={{ maxWidth: 280 }} />
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.sevenDay} onChange={(e) => setNotif((p) => ({ ...p, sevenDay: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 7-day departure</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.twentyFourHr} onChange={(e) => setNotif((p) => ({ ...p, twentyFourHr: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 24-hour return</label>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Export */}
+      <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif" }}>Export</div>
+        <button className="bs" onClick={() => upcoming.forEach((f) => window.open(gcalURL(f, members), "_blank"))}><CalIcon /> Sync All to Google Cal</button>
+      </div>
     </div>
   );
 }
@@ -1687,7 +1698,7 @@ useEffect(() => {
       }
     }
     setForm({ ...EMPTY });
-    setView("flights");
+    setView("trips");
   }, [form, editing, userId]);
 
   const del = useCallback(async (id) => {
@@ -1817,24 +1828,12 @@ useEffect(() => {
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: `${C.bg}ee`, backdropFilter: "blur(12px)", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", justifyContent: "center", gap: 1, padding: "2px 8px", overflowX: "auto" }}>
           <NavTab icon={BarChart3} label="Home" id="dashboard" active={view === "dashboard"} onNav={handleNav} />
-          <NavTab ci={<PlaneIcon size={16} color={view === "flights" ? C.accent : C.textMuted} />} label="Flights" id="flights" active={view === "flights"} onNav={handleNav} />
-          <NavTab icon={Star} label="Review" id="review" active={view === "review"} onNav={handleNav} />
-          <NavTab icon={Compass} label="Calendar" id="calendar" active={view === "calendar"} onNav={handleNav} />
+          <NavTab ci={<PlaneIcon size={16} color={view === "trips" ? C.accent : C.textMuted} />} label="Trips" id="trips" active={view === "trips"} onNav={handleNav} />
           <NavTab icon={Users} label="Family" id="family" active={view === "family"} onNav={handleNav} />
-          <NavTab icon={Plus} label="Add" id="add" active={view === "add"} onNav={handleNav} />
+          <NavTab icon={User} label="Me" id="me" active={view === "me"} onNav={handleNav} />
         </div>
       </nav>
-      {/* User bar */}
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "8px 12px 0", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
-        {session.user?.user_metadata?.avatar_url && (
-          <img src={session.user.user_metadata.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${C.border}` }} />
-        )}
-        <span style={{ fontSize: 11, color: C.textMuted }}>{userName}</span>
-        <button onClick={signOut} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.textDim, padding: "4px 8px", borderRadius: 6, transition: "color 0.2s" }}>
-          <LogOut size={12} /> Sign out
-        </button>
-      </div>
-      <main style={{ maxWidth: 820, margin: "0 auto", padding: "12px 12px 80px" }}>
+      <main style={{ maxWidth: 820, margin: "0 auto", padding: "12px 12px 100px" }}>
         {view === "dashboard" && (
           <Dashboard
             upcoming={upcoming} flights={flights} members={allPeople}
@@ -1844,36 +1843,34 @@ useEffect(() => {
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
           />
         )}
-        {view === "flights" && (
-          <FlightsView
+        {view === "trips" && (
+          <TripsView
             search={search} setSearch={setSearch} filtered={filtered}
             members={allPeople}
             onOpenDetail={setDetail} onAdd={handleAdd}
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
-          />
-        )}
-        {view === "calendar" && (
-          <CalendarView
-            calM={calM} calY={calY} setCalM={setCalM} setCalY={setCalY}
-            calFBD={calFBD} onOpenDetail={setDetail}
-          />
-        )}
-        {view === "review" && (
-          <ReviewView
-            yf={yf} yMi={yMi} ySp={ySp} yAP={yAP} yAL={yAL}
-            topAP={topAP} curYear={curYear}
+            calM={calM} calY={calY} setCalM={setCalM} setCalY={setCalY} calFBD={calFBD}
           />
         )}
         {view === "family" && (
           <FamilyView
             showMF={showMF} setShowMF={setShowMF} newMem={newMem}
             setNewMem={setNewMem} addMem={addMem} members={members}
-            rmMem={rmMem} notif={notif} setNotif={setNotif}
-            upcoming={upcoming} members2={members}
+            rmMem={rmMem}
             inviteEmail={inviteEmail} setInviteEmail={setInviteEmail}
             inviteLoading={inviteLoading} sendInvite={sendInvite}
             inviteLink={inviteLink} invites={invites}
             connectedMembers={connectedMembers} familyFlights={familyFlights}
+          />
+        )}
+        {view === "me" && (
+          <MeView
+            yf={yf} yMi={yMi} ySp={ySp} yAP={yAP} yAL={yAL}
+            topAP={topAP} curYear={curYear}
+            notif={notif} setNotif={setNotif}
+            upcoming={upcoming} members={members}
+            userName={userName} avatarUrl={session?.user?.user_metadata?.avatar_url}
+            signOut={signOut}
           />
         )}
         {view === "add" && (
@@ -1887,6 +1884,22 @@ useEffect(() => {
           />
         )}
       </main>
+      {/* Floating Add Button */}
+      {view !== "add" && (
+        <button onClick={handleAdd} style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 60,
+          width: 52, height: 52, borderRadius: "50%",
+          background: C.accent, color: C.cream, border: "none",
+          boxShadow: "0 4px 20px rgba(199,91,42,0.35)",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.2s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.1)"; e.currentTarget.style.boxShadow = "0 6px 28px rgba(199,91,42,0.45)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(199,91,42,0.35)"; }}
+        >
+          <Plus size={24} />
+        </button>
+      )}
       {detail && <DetailModal f={detail} members={allPeople} onClose={() => setDetail(null)} onEdit={edit} onDelete={del} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight} />}
     </div>
   );
