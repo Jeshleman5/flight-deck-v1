@@ -6,6 +6,8 @@ import {
   BarChart3, Compass, RefreshCw, LogOut, User
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import { Map, Source, Layer, NavigationControl } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 /* ── Brand Palette ───────────────────────────────────── */
 const C = {
@@ -498,26 +500,101 @@ function Tag({ m, sel, onClick, onRm }) {
   );
 }
 
-/* ── Globe Map ──────────────────────────────────────── */
-function GlobeMap({flights}) {
-  const W=700,H=380;
-  const proj=([lat,lon])=>[((lon+180)/360)*W,((90-lat)/180)*H];
-  const arcs=flights.filter(f=>AP[f.departureAirport?.toUpperCase()]&&AP[f.arrivalAirport?.toUpperCase()]).map(f=>{
-    const from=proj(AP[f.departureAirport.toUpperCase()]),to=proj(AP[f.arrivalAirport.toUpperCase()]);
-    const mx=(from[0]+to[0])/2,my=(from[1]+to[1])/2,dist=Math.sqrt((to[0]-from[0])**2+(to[1]-from[1])**2);
-    return {from,to,path:`M${from[0]},${from[1]} Q${mx},${my-Math.min(dist*0.3,60)} ${to[0]},${to[1]}`,f};
-  });
-  const dots={};
-  flights.forEach(f=>{[f.departureAirport,f.arrivalAirport].forEach(c=>{if(c&&AP[c.toUpperCase()]&&!dots[c.toUpperCase()]) dots[c.toUpperCase()]=proj(AP[c.toUpperCase()])})});
+/* ── Globe Map (MapLibre) ──────────────────────────── */
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap © CARTO",
+    },
+  },
+  layers: [{ id: "carto-tiles", type: "raster", source: "carto" }],
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+};
+
+function greatCircleArc(from, to, n = 60) {
+  const toR = (d) => (d * Math.PI) / 180;
+  const toD = (r) => (r * 180) / Math.PI;
+  const [lat1, lng1] = [toR(from[0]), toR(from[1])];
+  const [lat2, lng2] = [toR(to[0]), toR(to[1])];
+  const d = 2 * Math.asin(Math.sqrt(
+    Math.sin((lat1 - lat2) / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin((lng1 - lng2) / 2) ** 2
+  ));
+  if (d < 0.0001) return [[from[1], from[0]], [to[1], to[0]]];
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    const A = Math.sin((1 - f) * d) / Math.sin(d);
+    const B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(lat1) * Math.cos(lng1) + B * Math.cos(lat2) * Math.cos(lng2);
+    const y = A * Math.cos(lat1) * Math.sin(lng1) + B * Math.cos(lat2) * Math.sin(lng2);
+    const z = A * Math.sin(lat1) + B * Math.sin(lat2);
+    pts.push([toD(Math.atan2(y, x)), toD(Math.atan2(z, Math.sqrt(x * x + y * y)))]);
+  }
+  return pts;
+}
+
+function GlobeMap({ flights }) {
+  const arcData = useMemo(() => {
+    const features = flights
+      .filter((f) => AP[f.departureAirport?.toUpperCase()] && AP[f.arrivalAirport?.toUpperCase()])
+      .map((f) => {
+        const from = AP[f.departureAirport.toUpperCase()];
+        const to = AP[f.arrivalAirport.toUpperCase()];
+        return {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: greatCircleArc(from, to) },
+          properties: { flight: `${f.departureAirport}-${f.arrivalAirport}` },
+        };
+      });
+    return { type: "FeatureCollection", features };
+  }, [flights]);
+
+  const airportData = useMemo(() => {
+    const seen = {};
+    flights.forEach((f) => {
+      [f.departureAirport, f.arrivalAirport].forEach((code) => {
+        const c = code?.toUpperCase();
+        if (c && AP[c] && !seen[c]) seen[c] = AP[c];
+      });
+    });
+    return {
+      type: "FeatureCollection",
+      features: Object.entries(seen).map(([code, [lat, lng]]) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [lng, lat] },
+        properties: { code },
+      })),
+    };
+  }, [flights]);
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto"}}>
-      <defs><pattern id="mg" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M 35 0 L 0 0 0 35" fill="none" stroke={C.border} strokeWidth="0.4" opacity="0.6"/></pattern></defs>
-      <rect width={W} height={H} fill={C.bgWarm}/><rect width={W} height={H} fill="url(#mg)"/>
-      <g opacity="0.12" fill={C.textMuted}><ellipse cx="175" cy="125" rx="78" ry="58"/><ellipse cx="208" cy="248" rx="38" ry="62"/><ellipse cx="358" cy="98" rx="32" ry="28"/><ellipse cx="368" cy="205" rx="33" ry="52"/><ellipse cx="488" cy="118" rx="72" ry="48"/><ellipse cx="558" cy="268" rx="28" ry="18"/></g>
-      {arcs.map((a,i)=><g key={i}><path d={a.path} fill="none" stroke={C.accent} strokeWidth="1.5" opacity="0.35" strokeDasharray="4 3"/><path d={a.path} fill="none" stroke={C.accent} strokeWidth="2" opacity="0.7" strokeDasharray={`${8+i*3} 300`}/></g>)}
-      {Object.entries(dots).map(([code,[x,y]])=><g key={code}><circle cx={x} cy={y} r="4.5" fill={C.bgCard} stroke={C.accent} strokeWidth="1.5"/><circle cx={x} cy={y} r="1.5" fill={C.accent}/><text x={x} y={y-8} textAnchor="middle" fill={C.text} fontSize="7.5" fontFamily="'JetBrains Mono',monospace" fontWeight="600">{code}</text></g>)}
-      <g transform="translate(648,340)"><circle r="17" fill={C.bgCard} stroke={C.border} strokeWidth="0.8"/><text textAnchor="middle" y="-7" fontSize="6.5" fill={C.textMuted} fontWeight="700" fontFamily="'Fraunces',serif">N</text><line x1="0" y1="-4" x2="0" y2="4" stroke={C.accent} strokeWidth="0.8"/><line x1="-4" y1="0" x2="4" y2="0" stroke={C.textDim} strokeWidth="0.4"/></g>
-    </svg>
+    <Map
+      initialViewState={{ longitude: -40, latitude: 30, zoom: 1.5, pitch: 15 }}
+      style={{ width: "100%", height: 380 }}
+      mapStyle={MAP_STYLE}
+      projection="globe"
+      attributionControl={false}
+    >
+      <Source id="arcs" type="geojson" data={arcData}>
+        <Layer id="arc-glow" type="line" paint={{ "line-color": C.accent, "line-width": 5, "line-opacity": 0.12, "line-blur": 3 }} layout={{ "line-cap": "round" }} />
+        <Layer id="arc-line" type="line" paint={{ "line-color": C.accent, "line-width": 2, "line-opacity": 0.8, "line-dasharray": [2, 2] }} layout={{ "line-cap": "round" }} />
+      </Source>
+      <Source id="airports" type="geojson" data={airportData}>
+        <Layer id="airport-glow" type="circle" paint={{ "circle-radius": 10, "circle-color": C.accent, "circle-opacity": 0.08 }} />
+        <Layer id="airport-dot" type="circle" paint={{ "circle-radius": 3.5, "circle-color": C.bgCard, "circle-stroke-width": 1.5, "circle-stroke-color": C.accent }} />
+        <Layer id="airport-label" type="symbol" layout={{ "text-field": ["get", "code"], "text-size": 10, "text-offset": [0, 1.3], "text-anchor": "top", "text-font": ["Open Sans Bold"] }} paint={{ "text-color": C.text, "text-halo-color": C.bgCard, "text-halo-width": 1.5 }} />
+      </Source>
+      <NavigationControl position="top-right" showCompass={false} />
+    </Map>
   );
 }
 
