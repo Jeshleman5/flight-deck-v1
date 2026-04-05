@@ -1551,16 +1551,20 @@ export default function FlightDeck() {
   const userName = session?.user?.user_metadata?.full_name || session?.user?.email || '';
 
   // ── Load flights from Supabase when user signs in ──
-// ── Load local prefs (notif only — members now in Supabase) ──
+// ── Load notification preferences from Supabase ──
 useEffect(() => {
-  try {
-    const raw = localStorage.getItem('fd-local');
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (d.notif) setNotif(d.notif);
+  if (!userId) return;
+  (async () => {
+    const { data } = await supabase
+      .from('notification_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (data) {
+      setNotif({ enabled: data.enabled, email: data.email || '', sevenDay: data.seven_day, twentyFourHr: data.twenty_four_hr });
     }
-  } catch {}
-}, []);
+  })();
+}, [userId]);
 
 // ── Load flights + travelers from Supabase when user signs in ──
 useEffect(() => {
@@ -1709,11 +1713,24 @@ useEffect(() => {
     })();
   }, [userId, session]);
 
-  // ── Save notif prefs to localStorage (members now in Supabase) ──
+  // ── Save notif prefs to Supabase ──
+  const notifSaveRef = useRef(false);
   useEffect(() => {
-    if (!loaded) return;
-    try { localStorage.setItem('fd-local', JSON.stringify({ notif })); } catch {}
-  }, [notif, loaded]);
+    if (!loaded || !userId) return;
+    // Skip the initial load — only save after user interaction
+    if (!notifSaveRef.current) { notifSaveRef.current = true; return; }
+    const timer = setTimeout(async () => {
+      await supabase.from('notification_preferences').upsert({
+        user_id: userId,
+        enabled: notif.enabled,
+        email: notif.email,
+        seven_day: notif.sevenDay,
+        twenty_four_hr: notif.twentyFourHr,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    }, 800); // debounce so typing email doesn't fire on every keystroke
+    return () => clearTimeout(timer);
+  }, [notif, loaded, userId]);
 
   // ── Form updater ──
   const uf = useCallback((k,v) => setForm(p=>({...p,[k]:v})),[]);
