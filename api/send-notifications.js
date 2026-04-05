@@ -1,22 +1,12 @@
-// Vercel Serverless Function — Daily flight notification emails via Resend
+// Vercel Serverless Function — Family flight notification emails via Resend
+// Sends alerts to connected family members about each other's travel
 // Triggered by Vercel Cron (vercel.json) every morning at 12:00 UTC (8am ET)
-// Uses SUPABASE_SERVICE_ROLE_KEY to read all users' flights (bypasses RLS)
 
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
-  // Only allow GET (cron) or POST (manual trigger)
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Verify cron secret to prevent unauthorized triggers
-  // Vercel automatically sends this header for cron jobs
-  const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    // If CRON_SECRET is set, enforce it. If not set, allow (for testing).
-    // You can add CRON_SECRET later for extra security.
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -30,11 +20,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing RESEND_API_KEY' });
   }
 
-  // Service role client — bypasses RLS so we can read all users' flights
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // 1. Get all users who have notifications enabled
+    // 1. Get all users with notifications enabled
     const { data: prefs, error: prefsErr } = await supabase
       .from('notification_preferences')
       .select('*')
@@ -45,18 +34,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No users with notifications enabled', sent: 0 });
     }
 
-    // 2. For each user, check their flights
+    // 2. Calculate target dates
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    // Calculate target dates
-    const in7Days = new Date(today);
-    in7Days.setDate(in7Days.getDate() + 7);
-    const in7Str = in7Days.toISOString().split('T')[0];
 
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const in7Days = new Date(today);
+    in7Days.setDate(in7Days.getDate() + 7);
+    const in7Str = in7Days.toISOString().split('T')[0];
 
     let totalSent = 0;
     const errors = [];
@@ -64,11 +51,32 @@ export default async function handler(req, res) {
     for (const pref of prefs) {
       if (!pref.email) continue;
 
-      // Get user's upcoming flights
-      const { data: flights, error: flightsErr } = await supabase
+      // 3. Find this user's connected family members
+      const { data: myMemberships } = await supabase
+        .from('family_members')
+        .select('group_id')
+        .eq('user_id', pref.user_id);
+
+      if (!myMemberships || myMemberships.length === 0) continue;
+
+      const groupIds = myMemberships.map(m => m.group_id);
+
+      // Get all OTHER members in those groups
+      const { data: familyMembers } = await supabase
+        .from('family_members')
+        .select('user_id')
+        .in('group_id', groupIds)
+        .neq('user_id', pref.user_id);
+
+      if (!familyMembers || familyMembers.length === 0) continue;
+
+      const familyUserIds = [...new Set(familyMembers.map(m => m.user_id))];
+
+      // 4. Get family members' upcoming flights
+      const { data: familyFlights, error: flightsErr } = await supabase
         .from('flights')
         .select('*')
-        .eq('user_id', pref.user_id)
+        .in('user_id', familyUserIds)
         .eq('status', 'upcoming');
 
       if (flightsErr) {
@@ -76,24 +84,79 @@ export default async function handler(req, res) {
         continue;
       }
 
-      if (!flights || flights.length === 0) continue;
+      if (!familyFlights || familyFlights.length === 0) continue;
 
-      // Check which notifications to send
+      // 5. Look up family member names from profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', familyUserIds);
+
+      const nameMap = {};
+      (profiles || []).forEach(p => {
+        nameMap[p.id] = (p.name || 'Family member').split(' ')[0];
+      });
+
+      // 6. Check which notifications to send
       const toSend = [];
 
-      for (const flight of flights) {
-        // 7-day departure notification
-        if (pref.seven_day && flight.departure_date === in7Str) {
-          toSend.push({ flight, type: 'seven_day', subject: buildSubject(flight, '7 days') });
-        }
-
-        // 24-hour return notification (arrival is tomorrow)
-        if (pref.twenty_four_hr && flight.arrival_date === tomorrowStr) {
-          toSend.push({ flight, type: 'twenty_four_hr', subject: buildSubject(flight, 'tomorrow') });
+      // Group flights by user and trip for "trip starting" alerts
+      const flightsByUserTrip = {};
+      for (const flight of familyFlights) {
+        if (flight.trip_name) {
+          const key = `${flight.user_id}::${flight.trip_name}`;
+          if (!flightsByUserTrip[key]) flightsByUserTrip[key] = [];
+          flightsByUserTrip[key].push(flight);
         }
       }
 
-      // 3. Check which notifications were already sent
+      for (const flight of familyFlights) {
+        const travelerName = nameMap[flight.user_id] || 'Family member';
+
+        // Departure alert — flight departs tomorrow
+        if (pref.twenty_four_hr && flight.departure_date === tomorrowStr) {
+          toSend.push({
+            flight,
+            type: 'departure_alert',
+            travelerName,
+            subject: `✈️ ${travelerName} departs tomorrow — ${flight.departure_airport || '???'} → ${flight.arrival_airport || '???'}`,
+          });
+        }
+
+        // Arrival alert — flight arrives tomorrow
+        if ((pref.arrival_alert !== false) && flight.arrival_date === tomorrowStr) {
+          toSend.push({
+            flight,
+            type: 'arrival_alert',
+            travelerName,
+            subject: `✈️ ${travelerName} arrives tomorrow — ${flight.departure_airport || '???'} → ${flight.arrival_airport || '???'}`,
+          });
+        }
+
+        // Trip starting — 7 days before the FIRST flight of a trip
+        if (pref.seven_day && flight.trip_name && flight.departure_date === in7Str) {
+          const key = `${flight.user_id}::${flight.trip_name}`;
+          const tripFlights = (flightsByUserTrip[key] || []).sort((a, b) =>
+            (a.departure_date || '').localeCompare(b.departure_date || '')
+          );
+          const earliest = tripFlights[0];
+
+          // Only send if THIS flight is the first leg of the trip
+          if (earliest && earliest.id === flight.id) {
+            const lastFlight = tripFlights[tripFlights.length - 1];
+            const endDate = lastFlight.arrival_date || lastFlight.departure_date;
+            toSend.push({
+              flight,
+              type: 'trip_starting',
+              travelerName,
+              tripEndDate: endDate,
+              subject: `✈️ ${travelerName}'s trip "${flight.trip_name}" starts in 7 days`,
+            });
+          }
+        }
+      }
+
+      // 7. Check for already-sent notifications and send new ones
       for (const item of toSend) {
         const { data: existing } = await supabase
           .from('notifications_sent')
@@ -103,10 +166,9 @@ export default async function handler(req, res) {
           .eq('notification_type', item.type)
           .maybeSingle();
 
-        if (existing) continue; // Already sent
+        if (existing) continue;
 
-        // 4. Send the email via Resend
-        const emailBody = buildEmailBody(item.flight, item.type);
+        const emailBody = buildFamilyEmail(item);
 
         try {
           const emailRes = await fetch('https://api.resend.com/emails', {
@@ -129,7 +191,6 @@ export default async function handler(req, res) {
             continue;
           }
 
-          // 5. Record that we sent this notification
           await supabase.from('notifications_sent').insert({
             user_id: pref.user_id,
             flight_id: item.flight.id,
@@ -155,32 +216,36 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Helpers ──
+// ── Email Builder ──
 
-function buildSubject(flight, timeframe) {
+function buildFamilyEmail(item) {
+  const { flight, type, travelerName, tripEndDate } = item;
   const route = `${flight.departure_airport || '???'} → ${flight.arrival_airport || '???'}`;
-  const flightNum = flight.flight_number ? ` (${flight.flight_number})` : '';
-
-  if (timeframe === '7 days') {
-    return `✈️ Your flight ${route}${flightNum} departs in 7 days`;
-  }
-  return `✈️ Your flight ${route}${flightNum} returns ${timeframe}`;
-}
-
-function buildEmailBody(flight, type) {
-  const route = `${flight.departure_airport || '???'} → ${flight.arrival_airport || '???'}`;
-  const flightNum = flight.flight_number || 'N/A';
+  const flightNum = flight.flight_number || '';
   const depDate = formatDate(flight.departure_date);
   const depTime = flight.departure_time || '';
   const arrDate = formatDate(flight.arrival_date);
   const arrTime = flight.arrival_time || '';
-  const tripName = flight.trip_name ? `<p style="margin:0 0 4px;font-size:13px;color:#2C3E6B;"><strong>Trip:</strong> ${flight.trip_name}</p>` : '';
-  const confirmation = flight.confirmation_code ? `<p style="margin:0 0 4px;font-size:13px;color:#666;"><strong>Confirmation:</strong> ${flight.confirmation_code}</p>` : '';
-  const isWork = flight.is_work ? '<span style="display:inline-block;background:#e8ecf4;color:#2C3E6B;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;margin-left:6px;">Work</span>' : '';
+  const tripName = flight.trip_name || '';
+  const isWork = flight.is_work;
+  const confirmation = flight.confirmation_code || '';
 
-  const headline = type === 'seven_day'
-    ? `Your flight departs in <strong>7 days</strong>`
-    : `Your flight returns <strong>tomorrow</strong>`;
+  let headline, detail;
+  if (type === 'departure_alert') {
+    headline = `<strong>${travelerName}</strong> departs <strong>tomorrow</strong>`;
+    detail = depTime ? `Leaves at ${depTime}` : '';
+  } else if (type === 'arrival_alert') {
+    headline = `<strong>${travelerName}</strong> arrives <strong>tomorrow</strong>`;
+    detail = arrTime ? `Lands at ${arrTime}` : '';
+  } else if (type === 'trip_starting') {
+    headline = `<strong>${travelerName}'s</strong> trip starts in <strong>7 days</strong>`;
+    detail = tripEndDate ? `${depDate} — ${formatDate(tripEndDate)}` : '';
+  }
+
+  const workBadge = isWork ? '<span style="display:inline-block;background:#e8ecf4;color:#2C3E6B;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;margin-left:6px;">Work</span>' : '';
+  const tripBadge = tripName ? `<p style="margin:0 0 4px;font-size:13px;color:#2C3E6B;"><strong>Trip:</strong> ${tripName}</p>` : '';
+  const confLine = confirmation ? `<p style="margin:0 0 4px;font-size:13px;color:#666;"><strong>Confirmation:</strong> ${confirmation}</p>` : '';
+  const detailLine = detail ? `<p style="margin:8px 0 0;font-size:14px;color:#2A2520;font-weight:600;text-align:center;">${detail}</p>` : '';
 
   return `
 <!DOCTYPE html>
@@ -199,18 +264,17 @@ function buildEmailBody(flight, type) {
         <div style="background:#F8F4EC;border-radius:12px;padding:16px;margin-bottom:16px;">
           <div style="text-align:center;margin-bottom:8px;">
             <span style="font-family:monospace;font-size:28px;font-weight:700;color:#2A2520;">${route}</span>
-            ${isWork}
+            ${workBadge}
           </div>
-          <div style="text-align:center;font-size:13px;color:#8B7E6A;margin-bottom:8px;">
-            Flight ${flightNum}
-          </div>
+          ${flightNum ? `<div style="text-align:center;font-size:13px;color:#8B7E6A;margin-bottom:8px;">Flight ${flightNum}</div>` : ''}
           <div style="display:flex;justify-content:space-between;font-size:13px;color:#2A2520;">
             <div><strong>Departs:</strong> ${depDate} ${depTime}</div>
             <div><strong>Arrives:</strong> ${arrDate} ${arrTime}</div>
           </div>
+          ${detailLine}
         </div>
-        ${tripName}
-        ${confirmation}
+        ${tripBadge}
+        ${confLine}
         <p style="margin:16px 0 0;font-size:11px;color:#B5A998;text-align:center;">
           Sent by Flight Deck · <a href="https://flight-deck-v1.vercel.app" style="color:#C75B2A;text-decoration:none;">Open App</a>
         </p>

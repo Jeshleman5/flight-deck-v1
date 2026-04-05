@@ -1332,14 +1332,16 @@ function MeView({ yf, yMi, ySp, yAP, yAL, topAP, curYear, notif, setNotif, upcom
 
       {/* Notifications */}
       <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16 }}>
-        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Notifications</div>
+        <div style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'Fraunces',serif", display: "flex", alignItems: "center", gap: 4 }}><Bell size={11} /> Family Notifications</div>
+        <p style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.5, marginBottom: 10 }}>Get emailed when your connected family members have upcoming travel. They'll receive the same alerts about yours.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.enabled} onChange={(e) => setNotif((p) => ({ ...p, enabled: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Enable notifications</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.enabled} onChange={(e) => setNotif((p) => ({ ...p, enabled: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Enable family notifications</label>
           {notif.enabled && (
             <>
               <input value={notif.email} onChange={(e) => setNotif((p) => ({ ...p, email: e.target.value }))} placeholder="your@email.com" type="email" style={{ maxWidth: 280 }} />
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.sevenDay} onChange={(e) => setNotif((p) => ({ ...p, sevenDay: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 7-day departure</label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.twentyFourHr} onChange={(e) => setNotif((p) => ({ ...p, twentyFourHr: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> 24-hour return</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.sevenDay} onChange={(e) => setNotif((p) => ({ ...p, sevenDay: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Trip starting (7 days before first flight)</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.twentyFourHr} onChange={(e) => setNotif((p) => ({ ...p, twentyFourHr: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Departure alert (flight leaves tomorrow)</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}><input type="checkbox" checked={notif.arrivalAlert} onChange={(e) => setNotif((p) => ({ ...p, arrivalAlert: e.target.checked }))} style={{ width: "auto", accentColor: C.accent }} /> Arrival alert (flight lands tomorrow)</label>
             </>
           )}
         </div>
@@ -1505,7 +1507,7 @@ export default function FlightDeck() {
   const [detail,setDetail] = useState(null);
   const [showMF,setShowMF] = useState(false);
   const [newMem,setNewMem] = useState({name:"",relationship:"spouse"});
-  const [notif,setNotif] = useState({enabled:false,email:"",sevenDay:true,twentyFourHr:true});
+  const [notif,setNotif] = useState({enabled:false,email:"",sevenDay:true,twentyFourHr:true,arrivalAlert:true});
   const [spendFilter,setSpendFilter] = useState("all"); // "all" | "personal" | "work"
   const [looking,setLooking] = useState(false);
   const [lookErr,setLookErr] = useState("");
@@ -1561,7 +1563,7 @@ useEffect(() => {
       .eq('user_id', userId)
       .maybeSingle();
     if (data) {
-      setNotif({ enabled: data.enabled, email: data.email || '', sevenDay: data.seven_day, twentyFourHr: data.twenty_four_hr });
+      setNotif({ enabled: data.enabled, email: data.email || '', sevenDay: data.seven_day, twentyFourHr: data.twenty_four_hr, arrivalAlert: data.arrival_alert !== false });
     }
   })();
 }, [userId]);
@@ -1726,6 +1728,7 @@ useEffect(() => {
         email: notif.email,
         seven_day: notif.sevenDay,
         twenty_four_hr: notif.twentyFourHr,
+        arrival_alert: notif.arrivalAlert,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
     }, 800); // debounce so typing email doesn't fire on every keystroke
