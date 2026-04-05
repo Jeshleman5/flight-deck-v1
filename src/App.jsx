@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Plus, Upload, Clock, Trash2, Edit3, Download, ChevronLeft, ChevronRight,
   X, Check, Loader2, Globe, Hash, AlertCircle, CheckCircle2,
-  Search, Users, Bell, Star, MapPin, Mail,
+  Search, Users, Bell, Star, MapPin, Mail, Briefcase,
   BarChart3, Compass, RefreshCw, LogOut, User
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
@@ -393,7 +393,7 @@ const dlICS = (f,mem) => {
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));a.download=`${f.flightNumber||"flight"}.ics`;a.click();
 };
 
-const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:[],tripName:""};
+const EMPTY = {airline:"",flightNumber:"",departureAirport:"",arrivalAirport:"",departureDate:"",departureTime:"",arrivalDate:"",arrivalTime:"",departureTerminal:"",arrivalTerminal:"",cost:"",miles:"",confirmationCode:"",notes:"",status:"upcoming",travelers:[],tripName:"",isWork:false};
 const DEF_MEM = [{id:"me",name:"Me",relationship:"self",color:C.accent}];
 const RELS = ["self","spouse","parent","in-law","sibling","child","other"];
 const REL_COL = {self:C.accent,spouse:C.olive,parent:C.navy,"in-law":C.sand,sibling:"#7B6B8D",child:"#6B8D7B",other:C.textMuted};
@@ -660,7 +660,8 @@ function FlightCard({ f, i = 0, members, onOpenDetail, liveStatus, refreshingId,
             </div>
           )}
           {tv.length > 0 && <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>{tv.map((m) => <span key={m.id} style={{ fontSize: 9, color: m.color, background: `${m.color}10`, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{m.name}</span>)}</div>}
-          {f.tripName && <div style={{ marginTop: 4 }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>{f.tripName}</span></div>}
+          {f.tripName && <div style={{ marginTop: 4, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, fontFamily: "'Fraunces',serif" }}>{f.tripName}</span>{f.isWork && <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}><Briefcase size={9} /> Work</span>}</div>}
+          {!f.tripName && f.isWork && <div style={{ marginTop: 4 }}><span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}><Briefcase size={9} /> Work</span></div>}
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
           {f.flightNumber && <div style={{ textAlign: "center" }}><div style={{ fontSize: 8, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Flight</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600, color: C.navy }}>{f.flightNumber}</div></div>}
@@ -711,6 +712,7 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
             <span style={{ fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 700, color: C.text }}>{tripName}</span>
             <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600 }}>{flights.length} {flights.length === 1 ? "leg" : "legs"}</span>
+            {flights.some(f => f.isWork) && <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}><Briefcase size={9} /> Work</span>}
           </div>
           <div style={{ display: "flex", gap: 12, fontSize: 11, color: C.textMuted }}>
             <span>{fmtShort(first?.departureDate)} — {fmtShort(last?.arrivalDate || last?.departureDate)}</span>
@@ -923,6 +925,7 @@ function TripSummaryCard({ trip }) {
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 700, color: C.text }}>{trip.name}</span>
             <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "1px 6px", borderRadius: 6, fontWeight: 600 }}>{trip.count} {trip.count === 1 ? "leg" : "legs"}</span>
+            {trip.legs.some(f => f.isWork || f.is_work) && <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "1px 6px", borderRadius: 6, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 2 }}><Briefcase size={8} /> Work</span>}
           </div>
           <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
             {fmtShort(trip.startDate)} — {fmtShort(trip.endDate)}
@@ -1070,6 +1073,18 @@ function AddFlightForm({ editing, form, uf, lookupFlight, looking, lookErr, togT
             <select value={form.status} onChange={(e) => uf("status", e.target.value)}><option value="upcoming">Upcoming</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
           </div>
           <TripNameField value={form.tripName} onChange={(v) => uf("tripName", v)} tripNames={tripNames} />
+          <div style={{ flex: "1 1 calc(50% - 5px)", minWidth: 125, display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
+              <div onClick={() => uf("isWork", !form.isWork)} style={{
+                width: 38, height: 20, borderRadius: 10, padding: 2, cursor: "pointer", transition: "background 0.2s",
+                background: form.isWork ? C.navy : C.border,
+              }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "transform 0.2s", transform: form.isWork ? "translateX(18px)" : "translateX(0)" }} />
+              </div>
+              <Briefcase size={13} color={form.isWork ? C.navy : C.textDim} />
+              <span style={{ color: form.isWork ? C.navy : C.textMuted }}>Work trip</span>
+            </label>
+          </div>
           <div style={{ flex: "1 1 100%" }}>
             <label style={{ fontSize: 9, color: C.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block", fontFamily: "'Fraunces',serif" }}>Who's Flying</label>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -1121,7 +1136,10 @@ function DetailModal({ f, members, onClose, onEdit, onDelete, liveStatus, refres
         <div style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
             <div>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{airlineName(f.flightNumber) || f.airline || "Flight"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: "'Fraunces',serif", fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{airlineName(f.flightNumber) || f.airline || "Flight"}</span>
+                {f.isWork && <span style={{ fontSize: 9, color: C.navy, background: C.navySoft, padding: "2px 8px", borderRadius: 8, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}><Briefcase size={9} /> Work</span>}
+              </div>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 17, fontWeight: 700, color: C.navy, marginTop: 2 }}>{f.flightNumber || "--"}</div>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer" }}><X size={18} /></button>
@@ -1183,8 +1201,29 @@ function DetailModal({ f, members, onClose, onEdit, onDelete, liveStatus, refres
   );
 }
 
+/* ── SpendFilterToggle ─────────────────────────────── */
+function SpendFilterToggle({ value, onChange }) {
+  const opts = [{ id: "all", label: "All" }, { id: "personal", label: "Personal" }, { id: "work", label: "Work" }];
+  return (
+    <div style={{ display: "inline-flex", background: C.bgInput, borderRadius: 8, padding: 2, border: `1px solid ${C.border}` }}>
+      {opts.map(o => (
+        <button key={o.id} onClick={() => onChange(o.id)} style={{
+          background: value === o.id ? C.bgCard : "transparent",
+          border: value === o.id ? `1px solid ${C.border}` : "1px solid transparent",
+          borderRadius: 6, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer",
+          color: value === o.id ? C.text : C.textMuted, fontFamily: "'DM Sans',sans-serif",
+          transition: "all 0.15s", display: "flex", alignItems: "center", gap: 3,
+        }}>
+          {o.id === "work" && <Briefcase size={9} />}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ── Dashboard ──────────────────────────────────────── */
-function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh }) {
+function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles, totalSpend, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh, spendFilter, setSpendFilter }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", flexWrap: "wrap", gap: 10 }}>
@@ -1207,8 +1246,12 @@ function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Stat icon={<PlaneIcon size={15} color={C.olive} />} label="Upcoming" value={upcoming.length} sub={next ? `Next: ${fmtShort(next.departureDate)}` : "None"} color={C.olive} />
         <Stat icon={<CompassRose size={15} color={C.accent} />} label="Total Miles" value={comma(totalMiles)} sub={`${flights.length} flights`} color={C.accent} />
-        <Stat icon={<DollarIcon />} label="Spend" value={fmtCur(totalSpend)} sub={`${[...new Set(flights.map(f => f.tripName).filter(Boolean))].length || 0} trips`} color={C.sand} />
+        <Stat icon={<DollarIcon />} label={spendFilter === "personal" ? "Personal Spend" : spendFilter === "work" ? "Work Spend" : "Spend"} value={fmtCur(totalSpend)} sub={`${[...new Set(flights.map(f => f.tripName).filter(Boolean))].length || 0} trips`} color={C.sand} />
         <Stat icon={<Clock size={15} color={C.navy} />} label="Next Trip" value={nextD != null ? (nextD === 0 ? "Today" : `${nextD}d`) : "--"} sub={next ? `${next.departureAirport} > ${next.arrivalAirport}` : ""} color={nextD != null && nextD <= 3 ? C.danger : C.navy} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 10, color: C.textDim, fontWeight: 600 }}>Spend view:</span>
+        <SpendFilterToggle value={spendFilter} onChange={setSpendFilter} />
       </div>
       {upcoming.length > 0 && (
         <div>
@@ -1235,7 +1278,7 @@ function Dashboard({ upcoming, flights, members, alerts, next, nextD, totalMiles
 }
 
 /* ── MeView ──────────────────────────────────────────── */
-function MeView({ yf, yMi, ySp, yAP, yAL, topAP, curYear, notif, setNotif, upcoming, members, userName, avatarUrl, signOut }) {
+function MeView({ yf, yMi, ySp, yAP, yAL, topAP, curYear, notif, setNotif, upcoming, members, userName, avatarUrl, signOut, spendFilter, setSpendFilter }) {
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Profile header */}
@@ -1259,11 +1302,15 @@ function MeView({ yf, yMi, ySp, yAP, yAL, topAP, curYear, notif, setNotif, upcom
           <p style={{ color: C.textMuted, fontSize: 12 }}>No flights for {curYear} yet.</p>
         ) : (
           <>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <Stat icon={<PlaneIcon size={15} color={C.accent} />} label="Flights" value={yf.length} color={C.accent} />
               <Stat icon={<CompassRose size={15} color={C.olive} />} label="Miles" value={comma(yMi)} sub={yMi > 0 ? `${Math.round(yMi / 24901 * 100)}% around Earth` : ""} color={C.olive} />
               <Stat icon={<MapPin size={15} color={C.navy} />} label="Airports" value={yAP.length} sub={`Hub: ${topAP}`} color={C.navy} />
-              <Stat icon={<DollarIcon />} label="Spent" value={fmtCur(ySp)} color={C.sand} />
+              <Stat icon={<DollarIcon />} label={spendFilter === "personal" ? "Personal" : spendFilter === "work" ? "Work" : "Spent"} value={fmtCur(ySp)} color={C.sand} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 10, color: C.textDim, fontWeight: 600 }}>Spend view:</span>
+              <SpendFilterToggle value={spendFilter} onChange={setSpendFilter} />
             </div>
             <div style={{ background: C.bgCard, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 10 }}><GlobeMap flights={yf} /></div>
             {yAL.length > 0 && <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{yAL.map((a) => <span key={a} style={{ background: C.bgInput, padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${C.border}` }}>{a}</span>)}</div>}
@@ -1366,6 +1413,7 @@ const toDb = (f, userId) => ({
   tags: f.travelers || [],
   traveler: (f.travelers || []).join(','),
   trip_name: f.tripName || '',
+  is_work: f.isWork || false,
 });
 
 const fromDb = (r) => ({
@@ -1387,6 +1435,7 @@ const fromDb = (r) => ({
   status: r.status || 'upcoming',
   travelers: r.tags || [],
   tripName: r.trip_name || '',
+  isWork: r.is_work || false,
 });
 
 /* ── Sign In Screen ───────────────────────────────────── */
@@ -1457,6 +1506,7 @@ export default function FlightDeck() {
   const [showMF,setShowMF] = useState(false);
   const [newMem,setNewMem] = useState({name:"",relationship:"spouse"});
   const [notif,setNotif] = useState({enabled:false,email:"",sevenDay:true,twentyFourHr:true});
+  const [spendFilter,setSpendFilter] = useState("all"); // "all" | "personal" | "work"
   const [looking,setLooking] = useState(false);
   const [lookErr,setLookErr] = useState("");
   const [liveStatus,setLiveStatus] = useState({});
@@ -1852,13 +1902,19 @@ useEffect(() => {
   const sorted = useMemo(() => [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || "")), [flights]);
   const filtered = useMemo(() => { if (!search) return sorted; return sorted.filter(f => [f.airline, f.flightNumber, f.departureAirport, f.arrivalAirport, f.confirmationCode, f.notes, f.tripName].filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))); }, [sorted, search]);
   const upcoming = useMemo(() => sorted.filter(f => f.status === "upcoming" && daysTo(f.departureDate) >= 0), [sorted]);
-  const totalSpend = useMemo(() => flights.reduce((s, f) => s + (f.cost || 0), 0), [flights]);
+  const totalSpend = useMemo(() => {
+    const sf = spendFilter === "personal" ? flights.filter(f => !f.isWork) : spendFilter === "work" ? flights.filter(f => f.isWork) : flights;
+    return sf.reduce((s, f) => s + (f.cost || 0), 0);
+  }, [flights, spendFilter]);
   const totalMiles = useMemo(() => flights.filter(f => f.status !== "cancelled").reduce((s, f) => s + (f.miles || 0), 0), [flights]);
   const next = upcoming[0], nextD = next ? daysTo(next.departureDate) : null;
   const curYear = new Date().getFullYear();
   const yf = useMemo(() => flights.filter(f => f.departureDate?.startsWith(String(curYear)) && f.status !== "cancelled"), [flights, curYear]);
   const yMi = useMemo(() => yf.reduce((s, f) => s + (f.miles || 0), 0), [yf]);
-  const ySp = useMemo(() => yf.reduce((s, f) => s + (f.cost || 0), 0), [yf]);
+  const ySp = useMemo(() => {
+    const sf = spendFilter === "personal" ? yf.filter(f => !f.isWork) : spendFilter === "work" ? yf.filter(f => f.isWork) : yf;
+    return sf.reduce((s, f) => s + (f.cost || 0), 0);
+  }, [yf, spendFilter]);
   const yAP = useMemo(() => [...new Set(yf.flatMap(f => [f.departureAirport, f.arrivalAirport].filter(Boolean)))], [yf]);
   const yAL = useMemo(() => [...new Set(yf.map(f => airlineName(f.flightNumber)).filter(v => v && v.length > 2))], [yf]);
   const topAP = useMemo(() => { const c = {}; yf.forEach(f => { [f.departureAirport, f.arrivalAirport].filter(Boolean).forEach(a => { c[a] = (c[a] || 0) + 1 }) }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || "--" }, [yf]);
@@ -1918,6 +1974,7 @@ useEffect(() => {
             totalMiles={totalMiles} totalSpend={totalSpend}
             onOpenDetail={setDetail} onAdd={handleAdd}
             liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={refreshFlight}
+            spendFilter={spendFilter} setSpendFilter={setSpendFilter}
           />
         )}
         {view === "trips" && (
@@ -1948,6 +2005,7 @@ useEffect(() => {
             upcoming={upcoming} members={members}
             userName={userName} avatarUrl={session?.user?.user_metadata?.avatar_url}
             signOut={signOut}
+            spendFilter={spendFilter} setSpendFilter={setSpendFilter}
           />
         )}
         {view === "add" && (
