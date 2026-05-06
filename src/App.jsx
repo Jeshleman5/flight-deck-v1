@@ -1612,29 +1612,23 @@ useEffect(() => {
       if (gid) setFamilyGroupId(gid);
 
       // Check for invite code in URL (e.g. ?invite=abc123)
+      // Calls a SECURITY DEFINER RPC that atomically joins the group and marks the invite accepted.
+      // Replaces an earlier two-step client flow that was silently failing on RLS.
       const params = new URLSearchParams(window.location.search);
       const inviteCode = params.get('invite');
       if (inviteCode) {
-        const { data: inv } = await supabase
-          .from('invites')
-          .select('*')
-          .eq('invite_code', inviteCode)
-          .eq('status', 'pending')
-          .single();
-        if (inv) {
-          await supabase.from('family_members').upsert({
-            family_group_id: inv.family_group_id,
-            user_id: userId,
-            role: 'member',
-            label: '',
-          }, { onConflict: 'family_group_id,user_id' });
-          await supabase.from('invites').update({
-            status: 'accepted',
-            accepted_at: new Date().toISOString(),
-          }).eq('id', inv.id);
-          // Clean URL
-          window.history.replaceState({}, '', window.location.pathname);
+        const { data: inviteResult, error: inviteErr } = await supabase.rpc('accept_invite_by_code', {
+          p_invite_code: inviteCode,
+        });
+        if (inviteErr) {
+          console.error('accept_invite_by_code error:', inviteErr);
+        } else if (inviteResult && inviteResult.success === false) {
+          console.warn('accept_invite_by_code did not succeed:', inviteResult);
+        } else if (inviteResult && inviteResult.success === true) {
+          console.log('Joined family group via invite code:', inviteResult.family_group_id);
         }
+        // Clean URL regardless of outcome
+        window.history.replaceState({}, '', window.location.pathname);
       }
 
       // Check for join_trip in URL (e.g. ?join_trip=Rome%202026)
@@ -1645,30 +1639,13 @@ useEffect(() => {
         window.history.replaceState({}, '', window.location.pathname);
       }
 
-      // Check if this user has pending invites to accept
-      const userEmail = session?.user?.email;
-      if (userEmail) {
-        const { data: pending } = await supabase
-          .from('invites')
-          .select('*')
-          .eq('invited_email', userEmail)
-          .eq('status', 'pending');
-        if (pending && pending.length > 0) {
-          for (const inv of pending) {
-            // Join the inviter's family group
-            await supabase.from('family_members').upsert({
-              family_group_id: inv.family_group_id,
-              user_id: userId,
-              role: 'member',
-              label: '',
-            }, { onConflict: 'family_group_id,user_id' });
-            // Mark invite as accepted
-            await supabase.from('invites').update({
-              status: 'accepted',
-              accepted_at: new Date().toISOString(),
-            }).eq('id', inv.id);
-          }
-        }
+      // Auto-accept any pending invites where the user's email matches.
+      // Catches users who sign in directly without clicking the invite link.
+      const { data: pendingResult, error: pendingErr } = await supabase.rpc('accept_pending_invites_for_me');
+      if (pendingErr) {
+        console.error('accept_pending_invites_for_me error:', pendingErr);
+      } else if (pendingResult && pendingResult.accepted > 0) {
+        console.log(`Auto-accepted ${pendingResult.accepted} pending invite(s)`);
       }
 
       // Load sent invites
