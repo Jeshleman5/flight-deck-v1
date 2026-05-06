@@ -759,25 +759,64 @@ function TripGroup({ tripName, flights, members, onOpenDetail, liveStatus, refre
 
 function TripsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, liveStatus, refreshingId, onRefresh, calM, calY, setCalM, setCalY, calFBD }) {
   const [mode, setMode] = useState("list"); // "list" or "calendar"
+  const [tripFilter, setTripFilter] = useState("upcoming"); // "upcoming" or "past"
   const displayFlights = filtered;
 
-  // Group by tripName
+  // Group by tripName, classify upcoming vs past, and sort accordingly.
+  // A trip is "upcoming" if its LAST flight is today or in the future
+  // (so mid-trip travel still shows in Upcoming, not Past).
   const { trips, ungrouped } = useMemo(() => {
     const tripMap = {};
-    const ungrouped = [];
+    const ungroupedAll = [];
     displayFlights.forEach(f => {
       if (f.tripName) {
         if (!tripMap[f.tripName]) tripMap[f.tripName] = [];
         tripMap[f.tripName].push(f);
       } else {
-        ungrouped.push(f);
+        ungroupedAll.push(f);
       }
     });
-    const trips = Object.entries(tripMap)
-      .map(([name, flights]) => ({ name, flights }))
-      .sort((a, b) => (a.flights[0]?.departureDate || "").localeCompare(b.flights[0]?.departureDate || ""));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isUpcomingDate = (dateStr) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      d.setHours(0, 0, 0, 0);
+      return d >= today;
+    };
+
+    const allTrips = Object.entries(tripMap).map(([name, flights]) => {
+      const sortedFlights = [...flights].sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
+      const lastDate = sortedFlights[sortedFlights.length - 1]?.departureDate || "";
+      return {
+        name,
+        flights: sortedFlights,
+        firstDate: sortedFlights[0]?.departureDate || "",
+        lastDate,
+        isUpcoming: isUpcomingDate(lastDate),
+      };
+    });
+
+    let trips, ungrouped;
+    if (tripFilter === "upcoming") {
+      trips = allTrips
+        .filter(t => t.isUpcoming)
+        .sort((a, b) => (a.firstDate || "").localeCompare(b.firstDate || "")); // next trip first
+      ungrouped = ungroupedAll
+        .filter(f => isUpcomingDate(f.departureDate))
+        .sort((a, b) => (a.departureDate || "").localeCompare(b.departureDate || ""));
+    } else {
+      trips = allTrips
+        .filter(t => !t.isUpcoming)
+        .sort((a, b) => (b.lastDate || "").localeCompare(a.lastDate || "")); // most recent past first
+      ungrouped = ungroupedAll
+        .filter(f => !isUpcomingDate(f.departureDate))
+        .sort((a, b) => (b.departureDate || "").localeCompare(a.departureDate || ""));
+    }
+
     return { trips, ungrouped };
-  }, [displayFlights]);
+  }, [displayFlights, tripFilter]);
 
   // Calendar helpers
   const calDays = () => {
@@ -792,7 +831,7 @@ function TripsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, 
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>Trips</h1>
+        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 800 }}>My Trips</h1>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
             <button onClick={() => setMode("list")} style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: mode === "list" ? C.accent : "transparent", color: mode === "list" ? C.cream : C.textMuted, fontFamily: "'Fraunces',serif", transition: "all 0.2s" }}>List</button>
@@ -803,6 +842,10 @@ function TripsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, 
 
       {mode === "list" && (
         <>
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", alignSelf: "flex-start" }}>
+            <button onClick={() => setTripFilter("upcoming")} style={{ padding: "6px 14px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: tripFilter === "upcoming" ? C.accent : "transparent", color: tripFilter === "upcoming" ? C.cream : C.textMuted, fontFamily: "'Fraunces',serif", transition: "all 0.2s" }}>Upcoming</button>
+            <button onClick={() => setTripFilter("past")} style={{ padding: "6px 14px", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: tripFilter === "past" ? C.accent : "transparent", color: tripFilter === "past" ? C.cream : C.textMuted, fontFamily: "'Fraunces',serif", transition: "all 0.2s" }}>Past</button>
+          </div>
           <div style={{ position: "relative" }}>
             <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textDim }} />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search trips..." style={{ paddingLeft: 32 }} />
@@ -810,7 +853,11 @@ function TripsView({ search, setSearch, filtered, members, onOpenDetail, onAdd, 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {trips.map(t => <TripGroup key={t.name} tripName={t.name} flights={t.flights} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
             {ungrouped.map((f, i) => <FlightCard key={f.id} f={f} i={i} members={members} onOpenDetail={onOpenDetail} liveStatus={liveStatus} refreshingId={refreshingId} onRefresh={onRefresh} />)}
-            {displayFlights.length === 0 && <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>{search ? "No match" : "No trips yet"}</div>}
+            {trips.length === 0 && ungrouped.length === 0 && (
+              <div style={{ textAlign: "center", padding: 32, color: C.textMuted }}>
+                {search ? "No match" : (tripFilter === "upcoming" ? "No upcoming trips" : "No past trips")}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -1958,7 +2005,7 @@ useEffect(() => {
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: `${C.bg}ee`, backdropFilter: "blur(12px)", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", justifyContent: "center", gap: 1, padding: "2px 8px", overflowX: "auto" }}>
           <NavTab icon={BarChart3} label="Home" id="dashboard" active={view === "dashboard"} onNav={handleNav} />
-          <NavTab ci={<PlaneIcon size={16} color={view === "trips" ? C.accent : C.textMuted} />} label="Trips" id="trips" active={view === "trips"} onNav={handleNav} />
+          <NavTab ci={<PlaneIcon size={16} color={view === "trips" ? C.accent : C.textMuted} />} label="My Trips" id="trips" active={view === "trips"} onNav={handleNav} />
           <NavTab icon={Users} label="Family" id="family" active={view === "family"} onNav={handleNav} />
           <NavTab icon={User} label="Me" id="me" active={view === "me"} onNav={handleNav} />
         </div>
